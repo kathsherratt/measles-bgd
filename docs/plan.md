@@ -80,21 +80,20 @@ Findings from the first look:
 - Some releases contain errors. The 11 August release repeats the cumulative figures in place of the 24h columns. There are gaps with no release (e.g. 15 to 18 September), where only the sum of 24h counts can be recovered, from the cumulatives on either side.
 - 6 April was downloaded empty on the first run and has been refetched. The manifest lists the remaining gaps.
 
-Approach:
+Implemented in `R/02-extract-dghs.R` (29 September):
 
-1. Deterministic parse with `pdftools::pdf_data()` (word positions), not an LLM. Rows are identified by division name using a fuzzy dictionary that covers both encodings; columns by x position.
-2. A template registry (`assets/dghs-templates.csv`) maps each layout period to column meanings. A new layout fails loudly rather than being guessed. Templates are identified by the header rows, which stay stable within a period even though the text is garbled.
-3. Checks that decide whether a template is right:
-   - the division rows sum to the total row;
-   - page 1 national figures equal the division total row;
-   - cumulative(t) = cumulative(t-1) + 24h(t);
-   - cumulatives never decrease;
-   - suspected ≥ confirmed, admitted ≥ discharged, and so on.
-   Failures are quarantined, as in `bvd-sitreps`.
-4. An LLM (agy) is used only to propose a template for a new layout. A human confirms it before it enters the registry.
-5. Output: `data/dghs-daily.csv`, long format: `report_date, window_start, window_end, geography, metric, period (24h|cumulative), value, source_file`.
+1. Deterministic parse of the `pdftools` text layer; no LLM. Rows are matched to divisions on stable substrings of the garbled labels (37 spellings of 9 names).
+2. The layout is chosen per release by testing A, B and C against the total row: 24h ≤ cumulative, suspected ≥ confirmed ≥ confirmed deaths, admitted ≥ discharged, suspected deaths under 10% of suspected. Anything other than exactly one fitting layout goes to quarantine. The result agrees with the date ranges found by hand (A 31 releases, B 4, C 132).
+3. Checks: divisions sum to the total; page 1 equals the total row; cumulative(t) = cumulative(t-1) + 24h(t). Failures are recorded, not corrected.
+4. Hand corrections in `assets/dghs-corrections.csv`, each with reason and evidence (13 May truncated number; 11 August 24h columns; 1 May division cumulatives).
+5. Footnotes and starred values written verbatim to `data/dghs-notes.csv` for translation. They explain several revisions.
+6. Outputs: `data/dghs-daily.csv` (long: `report_date, date_source, geography, measure, period, value, value_raw, correction, layout, source, file`), `data/dghs-checks.csv`, `data/dghs-notes.csv`, `data/dghs-campaign-raw.csv`, `data/quarantine/dghs.csv`.
 
-Duplicate slug dates are kept and resolved using the date printed in each document.
+Status: 169 of 170 releases parsed (6 April needs manual transcription). 139 of 8,440 continuity checks fail, clustered in early April and at documented revisions (10, 18, 23 May; 3 to 4 August).
+
+External validation: WHO's DON598 figures for 15 April (19,161 suspected; 2,973 confirmed; 166 suspected deaths; 12,318 admissions; 9,772 discharges) and the WHO regional bulletin's for 28 June (99,207; 11,710; 619; 93) match the extracted values exactly.
+
+Every reading of Bengali that a person should confirm is listed in `bangla-review.md`.
 
 ## Reporting delays in public data
 
@@ -192,28 +191,25 @@ Read from `assets/local/` (data dictionary, 33 variables, 89,253 records; case i
 | Nutritional status at presentation | Not on the form | Is MUAC or weight-for-height recorded anywhere, e.g. in hospital death reviews? |
 | Coverage | 89,253 records against 190,510 suspected cases in the press releases | Are the case investigation data and the Health Emergency Operation Centre (EOC) counts different streams? Is the difference cases not investigated, or reporting lag? |
 
-## Questions for WHO SEARO (30 September)
+## Questions for WHO
 
-1. Vintages: have past line-list exports been kept (weekly since April)? Is there a date of entry into the national database? Either gives the reporting triangle.
-2. Outcome: are follow-up, complications (including malnutrition), admission and outcome with date of death digitised? If not, is there a death line list or death review dataset?
-3. Linkage: can the case ID (`MSL BAN-…`) be included, so deaths and lab results can be joined to cases?
-4. Coverage: how do the case investigation records relate to the DGHS EOC counts (89,253 against 190,510 suspected)? Separate streams, or cases not yet investigated?
-5. Lab: sampling policy over time (all suspected cases, or a sample per cluster?), and when it changed.
-6. Campaign: how are post-vaccination rashes handled? Is the date of the campaign dose recorded (only 0.5% have `DateLastMCV`)?
-7. Camps: are camp cases in the national line list, the DGHS totals, both or neither? Can the camp surveillance weekly data for all of 2026 be shared? Is there a camp or FDMN identifier?
-8. Hospitals: admissions and deaths by age and nutritional status (MUAC, SAM).
-9. Coverage covariates: MR campaign and vitamin A coverage by district, including camps; routine MR1/MR2 by district and month from the DGHS dashboard.
-10. Data sharing terms, and what can be published in aggregate.
+Consolidated, in priority order, in `who-questions.md`.
 
-## Repository layout (this repo, for now)
+## Repository layout
 
 ```
-R/01-fetch-dghs.R      DGHS press release PDFs  -> data/pdf/dghs/, data/manifest-dghs.csv
-R/02-extract-dghs.R    template parse + checks  -> data/dghs-daily.csv
-R/03-fetch-context.R   WHO, UNICEF, UN, camp bulletins
-R/04-fetch-covariates.R HDX boundaries, population, DHS, IPC
-assets/local/          WHO/MoH material, gitignored
-docs/plan.md           this file
+R/01-fetch-dghs.R         DGHS press releases       -> data/pdf/dghs/, data/manifest-dghs.csv
+R/02-extract-dghs.R       parse, correct, check     -> data/dghs-*.csv (gitignored)
+R/03-fetch-context.R      WHO, UN, UNICEF, camps    -> data/pdf/context/, data/manifest-context.csv
+R/04-fetch-covariates.R   HDX                       -> data/covariates/
+assets/dghs-corrections.csv   hand corrections with evidence
+assets/local/             WHO/MoH material, gitignored
+data/parameters/          measles parameter register (epireview schema)
+docs/plan.md              this file
+docs/first-steps.md       next two weeks, step by step
+docs/vaccination.md       directions for vaccination and intervention analysis
+docs/who-questions.md     questions for WHO
+docs/bangla-review.md     readings for Bengali speakers to confirm
 ```
 
 Public and private analyses sit side by side. Private data stay under a gitignored path, and only aggregates approved for release leave it.
