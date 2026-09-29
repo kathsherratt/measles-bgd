@@ -13,14 +13,14 @@ In priority order: the first four decide what the nowcast and CFR analysis can b
 ## Definitions in the DGHS releases
 
 6. Are suspected cases and deaths inclusive of confirmed ones, or separate? Some public totals add them (909 + 100 = 1,009 deaths on 10 September).
-7. Are admissions and discharges all hospitals, or sentinel facilities?
+7. Are admissions and discharges from all hospitals, or sentinel facilities? Are the deaths hospital deaths, community deaths, or both? A hospital outcome ratio, deaths / (deaths + discharges), needs to know.
 8. Is there a record of DGHS revisions (e.g. 18 May, duplicate records at Rajshahi Medical College Hospital)?
 
 ## Lab and case classification
 
 9. Lab sampling policy over time: all suspected cases, or a sample per cluster? When did it change?
 10. How are rashes after an MR campaign dose handled? A recent vaccinee can be IgM-positive from the vaccine, so this matters for both case counts and any vaccine effectiveness estimate. Is the campaign dose date recorded (only 0.5% have `DateLastMCV`)? Is genotyping done?
-11. Rubella: how many suspected cases are rubella IgM-positive?
+11. Differential diagnosis: rubella IgM positivity and the discard rate by week. Dengue season (September) will add non-measles fever and rash to the suspected series.
 
 ## Camps
 

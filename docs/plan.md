@@ -152,7 +152,8 @@ Recommendation: fit each delay with `epidist` first. It sits on the same stack a
 - Expectation: renewal process with a measles generation interval (about 11 to 12 days), incubation as the latent reporting delay, and a random walk on growth by division, as in `bvd-analysis` `nc_fit()`. Report-day (weekday) effects on the reporting delay.
 - Structure: reuse the `bvd-analysis` split. An aggregation layer publishes `triangle.csv` with a `grouping` column (national, division, camp against non-camp), and the model stream reads it through `nc_triangle()`.
 - Evaluation: with several extracts, rerun nowcasts as if in real time and score them against later extracts with `scoringutils`. With a single extract, only the reporting delay's stability over onset time can be checked.
-- Public and private side by side: the line-list nowcast, re-aggregated by report date, should reproduce the DGHS series. Where it does not (89,253 records against 190,510 suspected), that gap is itself a finding about ascertainment.
+- The line list covers about 47% of DGHS suspected cases (89,253 against 190,510), probably least at the peak. A line-list nowcast estimates investigated cases, not incidence. Model the investigated fraction by division and week against the DGHS totals, and scale up with that uncertainty.
+- Suspected cases are the primary series; confirmed cases reflect lab policy (once an area is confirmed, WHO guidance moves to epi-linkage). Measles among untested cases can be estimated from positivity by age, onset-to-specimen interval and week.
 
 ## CFR with `cfrnow`
 
@@ -173,7 +174,9 @@ Things that will bias the estimate if not handled:
 - Death ascertainment. The DGHS releases count 1,003 suspected deaths. Deaths outside facilities, or never linked to a case record, look like survivors and pull the CFR down. Compare the deaths found in the line list with the DGHS total as a completeness check.
 - Case definition. CFR among lab-confirmed cases is biased if testing favours severe cases. Report CFR for suspected, confirmed and clinically compatible cases separately.
 - Changes over time. The MR campaign, vitamin A and case management changed during the outbreak, so `cfr` gets a smooth on time.
-- Benchmark. The aggregate delay-adjusted CFR from public data, by division, is the comparison for `cfrnow`.
+- Benchmark. The aggregate delay-adjusted CFR and hospital outcome ratio from public data, by division, and a naive CFR among line-list cases with onset more than 30 days before the cutoff. Six months in, most cases have resolved. `cfrnow` earns its place for the recent tail and for CFR changing over time; it is weakly identified otherwise, since it rests on the delay prior.
+- Death definitions. Until item 4 of `bangla-review.md` is settled, every CFR is reported for both readings (suspected deaths inclusive of confirmed, or separate).
+- Line-list CFR is a lower bound where deaths are found only in free text or missing; calibrate against the DGHS death count.
 
 ## What the case investigation data add
 

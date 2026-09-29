@@ -2,6 +2,17 @@
 
 Detailed plan for the next two weeks, 30 September 2026. It implements `plan.md` and sets up the pipeline for when WHO data arrive. Steps are numbered in the order to do them; later steps do not wait on WHO unless stated.
 
+## Priorities
+
+Nowcasting is the first analytical question, but it needs the line list. The critical path is therefore:
+
+1. WHO answers to questions 1 to 6 in `who-questions.md`: vintages, outcome fields, linkage, coverage of the line list, and whether suspected counts include confirmed ones.
+2. Bangla review of the priority 1 items. Every severity output depends on item 4.
+3. Public-data description and hospital CFR (step 3). These are useful to WHO now and need nothing new.
+4. A minimal line-list pipeline on simulated data (step 5), so the nowcast runs the day data arrive.
+
+Rt from public data (step 4) and the vaccination directions come after these.
+
 ## Workflow conventions
 
 | Convention | Choice | Why |
@@ -61,27 +72,27 @@ Following the five questions of descriptive epidemiology. Each display has a tit
 | Question | Display | Notes |
 |---|---|---|
 | What | Case definitions (suspected, lab-confirmed, clinically compatible); share confirmed over time | The confirmed share tracks testing, so say so |
-| How much | Cumulative and 7-day incidence per 100,000 by division (2022 population); under-5 rates where age is available | Rates, not counts; population from `cod-ps-bgd` |
+| How much | Cumulative and 7-day incidence per 100,000 by division (2022 population); rates per under-5 population alongside all-age, since 81% of cases are under five | Rates, not counts; population by 5-year band from `cod-ps-bgd`. Under-1 denominators need WorldPop or births. Division rates shown with and without Cox's Bazar until camp counting is known. |
 | When | Daily suspected cases by report date, 7-day mean, eight division panels on a shared log scale; campaign start (5 April; camps 26 April) and known revisions marked | Report date is a surrogate for onset; state it. Mark Saturday releases (Friday reporting). Bin daily, which is well under half the incubation period. |
 | Where | Choropleth of cumulative suspected incidence per 100,000 by division, closed legend; campaign coverage by division and city corporation as a dot plot | Division is the smallest unit with both numerator and denominator publicly |
 | Among whom | Age shares from WHO and UNICEF documents (81% under five, 34% under nine months) | Line list later |
-| Severity | Admission ratio, discharges and deaths by division; naive and delay-adjusted CFR by division (`cfr` package, onset-to-death from step 2) against wasting prevalence (DHS 2022) | Ecological; deaths by report date |
+| Severity | Admission ratio by division; hospital outcome ratio, deaths / (deaths + discharges), by division; naive and delay-adjusted CFR (`cfr` package); all under both death definitions (nested and disjoint, `bangla-review.md` item 4) | Hospital outcome ratio is well defined without follow-up, but only if deaths are hospital deaths (ask WHO). Wasting (DHS 2022) is shown alongside, descriptively, with no regression: 8 divisions and confounding by access and age mix make any fitted slope misleading. |
 | Camps | Weekly camp series against Cox's Bazar district and national, per 100,000 | Denominators: UNHCR registration |
 
 Scripts: `R/10-describe.R` writes figure data and tables to `outputs/describe/`; `reports/describe.qmd` renders them.
 
 ## Step 4: growth and transmission from public data (2 to 3 days)
 
-1. Growth rate and Rt by division from daily suspected cases by report date, using `epinowcast` with a renewal expectation, no reporting-delay model (reference = report date, `max_delay = 1`), a day-of-week effect on observations, and a random walk on growth by division. This keeps a single toolchain with the line-list model later.
-2. The generation interval and incubation period from step 2. Rt from report dates is lagged by incubation plus reporting delay; label it as such.
-3. Before and after the campaign by division (`vaccination.md` direction 3): growth in the 2 weeks before each division's start against weeks 3 to 5 after, with a caveat on susceptible depletion.
-4. Sensitivity: confirmed cases instead of suspected; dropping known revision days; generation interval ±2 days.
+1. Growth rate and Rt by division from daily suspected cases by report date, with `epinowcast`: a renewal process, with incubation plus a fixed onset-to-report delay convolved explicitly (`latent_reporting_delay`), a day-of-week effect on observations, and a random walk on growth by division. A single toolchain with the line-list model later.
+2. Known breaks in how cases were found, modelled or at least marked: the change of data source in mid-April, active case finding from the campaign start in each division, and the documented revisions. Measles in Bangladesh is seasonal (late winter to spring), so a decline from May is expected even without intervention.
+3. The before and after campaign comparison (`vaccination.md` direction 3) is descriptive only: susceptible depletion, seasonality and changing ascertainment all confound it. A causal estimate needs a transmission model.
+4. Sensitivity: confirmed cases instead of suspected; revisions spread over the preceding weeks rather than on the day (the 18 May removal implies duplicates in earlier 24h counts); generation interval ±2 days.
 
 Fits cached by cutoff, as above. Run detached; expect minutes per division.
 
-## Step 5: line-list pipeline built on simulated data (3 days, before WHO data arrive)
+## Step 5: line-list pipeline built on simulated data (about 1 day, before WHO data arrive)
 
-The analysis code can be written and tested now, so it runs the day the data land.
+The analysis code can be written and tested now, so it runs the day the data land. Keep the simulation minimal: its job is to test code against the real schema, not to be realistic.
 
 1. `R/20-simulate-linelist.R`: a line list with exactly the 33 columns of the WHO data dictionary, onset from the step 4 fits, and delays and CFR from step 2. It includes known quirks: about half with lab dates, age with DOB mostly missing, a death date in free text.
 2. `R/21-clean-linelist.R`: dates parsed and validated (fever before rash, notification after onset, and so on); death date parsed from `Comment` and flagged; age groups; camp flag from Ukhia, Teknaf and Hatiya (Bhasan Char) upazilas. Writes a tidy line list and a data-quality table.
@@ -89,7 +100,8 @@ The analysis code can be written and tested now, so it runs the day the data lan
 4. `R/23-delays.R`: `epidist` fits for each delay in `plan.md` (onset to notification, notification to investigation, onset to specimen, specimen to result), stratified by division and month, with right truncation at the extract date.
 5. `R/24-nowcast.R`: `epinowcast`, reusing `bvd-analysis` `nc_fit()` structure.
 6. `R/25-cfr.R`: `cfrnow` with `cfr ~ age_group + vaccinated + (1 | division) + s(time)`, death-only.
-7. Tests: each fit recovers the simulated parameters within its 90% interval. This is the check that the pipeline is right before real data are used.
+7. Tests: the delay and CFR fits recover simulated parameters within their 90% intervals. This checks the code only; it says nothing about bias in the real data.
+8. When real data arrive, first: discard rate, and rubella IgM positivity, by week and division. Dengue peaks in September, so suspected cases will increasingly include non-measles fever and rash. Key analyses on suspected cases, repeated on confirmed plus epi-linked cases.
 
 ## Step 6: reporting (ongoing)
 
