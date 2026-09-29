@@ -56,3 +56,6 @@ outputs/logs/
 # Extracted DGHS data: not published until terms are agreed; regenerate with R/
 data/dghs-*.csv
 data/quarantine/
+
+# Raw covariate downloads, refetchable via R/04-fetch-covariates.R
+data/raw/

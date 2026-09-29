@@ -1,0 +1,4 @@
+report_date,geography,measure,period,action,value,reason,evidence,reviewed_by
+2026-05-13,Total,discharged,cumulative,replace,33832,"Text layer truncates the number to 33,83","Page 1 prints 33,832; 14 May cumulative 34,968 minus 24h 1,136 = 33,832",
+2026-08-11,*,*,24h,drop,,"Release prints the cumulative figures in the 24h columns","Every 24h value equals the cumulative on the same row",
+2026-05-01,division,*,cumulative,drop,,"Division cumulatives inconsistent with 30 April and 2 May, and do not sum to the total row","e.g. Sylhet 1,555 / 2,725 / 1,670 on 30 April, 1 May, 2 May; total row agrees with page 1",
