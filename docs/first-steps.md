@@ -58,8 +58,8 @@ Acceptance test: every release date from 2 April to 29 September is either parse
 | Quantity | Starting point | Use |
 |---|---|---|
 | Incubation period (exposure to fever) | Lessler et al. 2009 lognormal (meanlog 2.526, sdlog 0.207; median about 12.5 days), via `epiparameter` | Latent delay in `epinowcast` |
-| Generation interval | Vink et al. 2014 (about 11 to 12 days), from the register | Renewal process |
-| Fever to rash | Register; check against the line list when it arrives | Choice of reference date |
+| Generation interval | Klinkenberg et al. 2011 (11 to 12 days) and Vink et al. 2014 serial interval (mean 11.7 days); both abstract-only in the register, so read the full texts first | Renewal process |
+| Fever to rash; admission to death; length of stay | No source found yet; estimate from the line list and from DGHS admissions and discharges | Reference date; hospital outcome ratio |
 | Onset to death | Register, weakly informative; co-estimated in `cfrnow` | CFR |
 | CFR by age and nutrition | Register (e.g. Portnoy 2019; Wolfson 2009) | Prior range for `cfrnow`; direction 5 in `vaccination.md` |
 
