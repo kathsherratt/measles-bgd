@@ -89,7 +89,7 @@ Implemented in `R/02-extract-dghs.R` (29 September):
 5. Footnotes and starred values written verbatim to `data/dghs-notes.csv` for translation. They explain several revisions.
 6. Outputs: `data/dghs-daily.csv` (long: `report_date, date_source, geography, measure, period, value, value_raw, correction, layout, source, file`), `data/dghs-checks.csv`, `data/dghs-notes.csv`, `data/dghs-campaign-raw.csv`, `data/quarantine/dghs.csv`.
 
-Status: 169 of 170 releases parsed (6 April needs manual transcription). 139 of 8,440 continuity checks fail, clustered in early April and at documented revisions (10, 18, 23 May; 3 to 4 August).
+Status: 169 of 170 releases parsed (6 April needs manual transcription). The footer date resolved every duplicate slug. No release is listed for 11 days (9, 23 and 29 July; 19 August; 7, 12, 13 and 15 to 18 September); for those, only the sum of 24h counts across the gap is recoverable. 139 of 8,440 continuity checks fail, clustered in early April and at documented revisions (10, 18, 23 May; 3 to 4 August).
 
 External validation: WHO's DON598 figures for 15 April (19,161 suspected; 2,973 confirmed; 166 suspected deaths; 12,318 admissions; 9,772 discharges) and the WHO regional bulletin's for 28 June (99,207; 11,710; 619; 93) match the extracted values exactly.
 
