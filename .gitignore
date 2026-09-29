@@ -39,11 +39,20 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
-# pkgdown site
-docs/
 
 # translation temp files
 po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Private material shared by WHO/MoH: never commit
+assets/local/
+
+# Publisher PDFs, refetchable from the manifest
+data/pdf/
+outputs/logs/
+
+# Extracted DGHS data: not published until terms are agreed; regenerate with R/
+data/dghs-*.csv
+data/quarantine/
