@@ -59,3 +59,7 @@ data/quarantine/
 
 # Raw covariate downloads, refetchable via R/04-fetch-covariates.R
 data/raw/
+
+# Covariates whose licence ("Other" on HDX) needs checking before publishing
+data/covariates/dhs_division.csv
+data/covariates/wuenic_national.csv
