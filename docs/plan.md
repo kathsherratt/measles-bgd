@@ -4,12 +4,27 @@ Status: draft, 29 September 2026.
 
 ## Aims
 
-1. Build a machine-readable, public record of the outbreak from published sources.
-2. Nowcast recent cases with `epinowcast`, first on public aggregate data, then on the WHO/MoH case-based data, run side by side.
-3. Track severity and its drivers, particularly acute malnutrition.
-4. Report Rohingya refugee camps (Cox's Bazar, Bhasan Char) separately wherever the data allow.
+Agreed with WHO on 30 September 2026 (call notes, not in the repository):
 
-Tonight's priority is aim 1.
+| Aim | Question | Status |
+|---|---|---|
+| 1. Real-time outbreak size and risk | Where is transmission now (Rt, nowcast), how large is the outbreak including infections never hospitalised, and what is the short- and longer-term risk? | Current focus; see `first-steps.md` |
+| 2. Impact of the campaigns | What did the April and May rounds and the September mop-up do to outbreak size, against counterfactuals? | Data gathering only; depends on the aim 1 transmission model |
+| 3. Unusual features of this outbreak | Why the size, the cases under 6 months, infections among the vaccinated, and the high burden of malnutrition and co-infection (adenovirus)? | Data gathering only |
+
+Cross-cutting: Rohingya camps reported separately wherever data allow (the first case was in the Cox's Bazar camps in January), and malnutrition as a driver of severity.
+
+The public record (`R/01` to `R/04`) serves all three aims.
+
+What the call established that changes the analysis:
+
+- All reported cases are hospitalised cases. The DGHS series counts admissions, not infections, so outbreak size needs a model of the unobserved community infections. DGHS 24h admissions are 85 to 97% of 24h suspected cases, consistent with this.
+- About 1,100 deaths in total, which matches suspected plus confirmed deaths (1,003 + 101 on 29 September). This supports reading the two counts as separate, pending confirmation.
+- The outbreak ran undetected for a substantial period: first case January (camps), spread from March and April, WHO informed in April. The DGHS daily series starts on 2 April, well after the start.
+- Cases are not yet linked to outcomes, but linkage may be possible.
+- Only about a thousand cases are PCR-confirmed; DGHS reports 21,392 confirmed, presumably mostly by IgM.
+- Genotype appears similar to circulating strains; some phylogenetic analysis exists.
+- IEDCR (government) is interested, works in R, has published analyses, and its director will join the next meeting.
 
 ## Public sources
 

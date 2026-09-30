@@ -4,14 +4,19 @@ Detailed plan for the next two weeks, 30 September 2026. It implements `plan.md`
 
 ## Priorities
 
-Nowcasting is the first analytical question, but it needs the line list. The critical path is therefore:
+Focus: aim 1, real-time outbreak size and risk (`plan.md`). Aims 2 and 3 are data gathering only for now; what they need is listed at the end so it can be requested alongside aim 1 data.
 
-1. WHO answers to questions 1 to 6 in `who-questions.md`: vintages, outcome fields, linkage, coverage of the line list, and whether suspected counts include confirmed ones.
-2. Bangla review of the priority 1 items. Every severity output depends on item 4.
-3. Public-data description and hospital CFR (step 3). These are useful to WHO now and need nothing new.
-4. A minimal line-list pipeline on simulated data (step 5), so the nowcast runs the day data arrive.
+The national daily count has sat near 1,000 hospitalised cases since April, but it is the sum of staggered division epidemics: Rajshahi fell from 216 to 26 a day between April and September while Sylhet rose from 46 to 152 and Chattogram from 159 to 252. Aim 1 is therefore a division-level analysis from the start.
 
-Rt from public data (step 4) and the vaccination directions come after these.
+Order of work:
+
+1. Public data finished and checked (steps 1 and 2), with the Bangla review of priority 1 items.
+2. Descriptive picture by division (step 3), including the early period before 2 April from WHO monthly data and camp documents.
+3. Growth and Rt by division from the hospitalised series (step 4).
+4. Bounds on outbreak size, including unhospitalised infections (step 4b).
+5. Short-term forecasts by division, evaluated against the DGHS series as it arrived (step 4c).
+6. Line-list nowcast pipeline on simulated data (step 5), ready for WHO or IEDCR data.
+7. A brief for the next meeting, when the IEDCR director joins (step 6).
 
 ## Workflow conventions
 
@@ -47,6 +52,7 @@ Rt from public data (step 4) and the vaccination directions come after these.
 | Classify every failed continuity check as revision, source error or parse error | `assets/dghs-revisions.csv` | Footnotes |
 | Extract a camp series from the context documents | `data/camps-measles.csv`: suspected, confirmed, epi-linked, deaths and admissions as reported (Health Sector monthly bulletins April to July, WHO regional bulletins, UN RCO sitreps) | Public camp surveillance bulletins give no camp-level numbers (only W36 2026 is public, and its map is binned), so a weekly camp series needs WHO |
 | Parse age, vaccination status and camp figures from the WHO, UNICEF and UN documents | `data/context-figures.csv`, each row with document, page and quote | |
+| WHO provisional monthly measles data for Bangladesh, 2012 to date ([WHO immunization data portal](https://immunizationdata.who.int/global?topic=Provisional-measles-and-rubella-data)) | `data/who-monthly.csv`: suspected and confirmed cases by month | Covers January to March 2026, before the DGHS series, and the pre-outbreak baseline |
 
 Acceptance test: every release date from 2 April to 29 September is either parsed, or listed with a reason (no release, quarantined, manual).
 
@@ -73,7 +79,7 @@ Following the five questions of descriptive epidemiology. Each display has a tit
 |---|---|---|
 | What | Case definitions (suspected, lab-confirmed, clinically compatible); share confirmed over time | The confirmed share tracks testing, so say so |
 | How much | Cumulative and 7-day incidence per 100,000 by division (2022 population); rates per under-5 population alongside all-age, since 81% of cases are under five | Rates, not counts; population by 5-year band from `cod-ps-bgd`. Under-1 denominators need WorldPop or births. Division rates shown with and without Cox's Bazar until camp counting is known. |
-| When | Daily suspected cases by report date, 7-day mean, eight division panels on a shared log scale; campaign start (5 April; camps 26 April) and known revisions marked | Report date is a surrogate for onset; state it. Mark Saturday releases (Friday reporting). Bin daily, which is well under half the incubation period. |
+| When | Monthly WHO surveillance counts from January (before DGHS daily reporting starts), then daily suspected cases by report date, 7-day mean, eight division panels on a shared log scale; campaign start (5 April; camps 26 April) and known revisions marked | Report date is a surrogate for onset; state it. Mark Saturday releases (Friday reporting). Bin daily, which is well under half the incubation period. |
 | Where | Choropleth of cumulative suspected incidence per 100,000 by division, closed legend; campaign coverage by division and city corporation as a dot plot | Division is the smallest unit with both numerator and denominator publicly |
 | Among whom | Age shares from WHO and UNICEF documents (81% under five, 34% under nine months) | Line list later |
 | Severity | Admission ratio by division; hospital outcome ratio, deaths / (deaths + discharges), by division; naive and delay-adjusted CFR (`cfr` package); all under both death definitions (nested and disjoint, `bangla-review.md` item 4) | Hospital outcome ratio is well defined without follow-up, but only if deaths are hospital deaths (ask WHO). Wasting (DHS 2022) is shown alongside, descriptively, with no regression: 8 divisions and confounding by access and age mix make any fitted slope misleading. |
@@ -90,6 +96,24 @@ Scripts: `R/10-describe.R` writes figure data and tables to `outputs/describe/`;
 
 Fits cached by cutoff, as above. Run detached; expect minutes per division.
 
+## Step 4b: outbreak size (aim 1, 2 to 3 days to a first bound)
+
+Reported cases are hospitalised cases, so the outbreak is larger than the DGHS count by an unknown factor. Three routes, to be compared rather than chosen between:
+
+| Route | What it needs | Available now? |
+|---|---|---|
+| Transmission model with susceptible depletion, fitted to hospitalised cases by division, estimating the hospitalised fraction | Pre-outbreak immunity by birth cohort: routine coverage (WUENIC, DHS, MICS 2019 by district), the 2024 to 2025 disruption (0.5 million missed in 2025), births; age distribution of cases | Partly: division level, national coverage |
+| Ratio methods: hospitalised cases divided by the probability of hospitalisation given infection; deaths divided by the infection fatality ratio | Literature values for hospitalisation and IFR in comparable settings (gap in the parameter register) | After a literature search |
+| Serology or community survey | A serosurvey or household survey in affected areas | Ask WHO and IEDCR |
+
+The first output is a range with its assumptions stated, not a point estimate. The same model carries the counterfactuals for aim 2.
+
+## Step 4c: short-term risk (aim 1, 1 to 2 days)
+
+- Forecasts of hospitalised cases by division, 1 to 4 weeks ahead, from the step 4 fits.
+- Evaluated as if in real time: each DGHS release is a snapshot of what was known that day, so forecasts made at past cutoffs can be scored against later releases with `scoringutils`.
+- District-level risk, and the longer-term question of when susceptibles rebuild (raised on the call in the context of the political transition, and for other vaccine-preventable diseases such as diphtheria), wait for district data and the step 4b model.
+
 ## Step 5: line-list pipeline built on simulated data (about 1 day, before WHO data arrive)
 
 The analysis code can be written and tested now, so it runs the day the data land. Keep the simulation minimal: its job is to test code against the real schema, not to be realistic.
@@ -105,15 +129,25 @@ The analysis code can be written and tested now, so it runs the day the data lan
 
 ## Step 6: reporting (ongoing)
 
-- `reports/sitrep.qmd`: one page per week, national and division. Epicurve, growth, CFR, campaign coverage and data caveats. Built from saved outputs.
+- First: a short brief for the next meeting, when the IEDCR director joins. Epicurves and Rt by division, what the plateau is made of, a first bound on outbreak size, and the data asks below. IEDCR works in R, so the scripts behind it should run on their machines.
+- Then `reports/sitrep.qmd`: one page per week, national and division, built from saved outputs.
 - Every figure has a CSV of the data behind it, so it can be checked and reused.
 - Public and private outputs are kept apart: public report from public data only; private outputs under `outputs/private/` (gitignored) until WHO agrees what can be shared.
 
-## Decisions pending from the WHO meeting
+## Data needed for aims 2 and 3
 
-| If WHO can share... | Then |
-|---|---|
-| Dated line-list extracts | Real reporting triangles, real-time evaluation of the nowcast with `scoringutils` |
-| A single current extract | `DNOT` as report date; delay stability checked across onset time only |
-| Outcome fields or a linkable death list | `cfrnow` as planned |
-| Nothing individual for now | Steps 3 and 4 carry the analysis; step 5 stays on simulated data |
+To request now, alongside aim 1 data, so the later aims are not held up. Numbers refer to `who-questions.md`.
+
+| Aim | Data | Why | Source to ask |
+|---|---|---|---|
+| 2 | Campaign dates, target ages and doses by district, for the April and May rounds and the September mop-up | Timing and reach of each round | DGHS/EPI; DGHS releases give division and city corporation only |
+| 2 | Target population estimates, and how they were made | Administrative coverage is 107 to 117%, and there is no electronic registry; 2 to 3 million eligible children were missed | EPI; WorldPop and census births as an alternative |
+| 2 | Post-campaign coverage survey | The only direct measure of reach | WHO, UNICEF |
+| 2 | Vaccination status and dose dates of cases | Separates vaccine failure from missed children | Line list |
+| 2 | Routine MR1 and MR2 by district and month, 2023 to 2026 | Pre-outbreak immunity profile | DGHS EPI dashboard (not reachable from outside Bangladesh) |
+| 3 | Line list linked to outcome | Severity and risk factors | WHO, IEDCR (linkage said to be possible) |
+| 3 | Age in months, especially under 6 months | Cases below the age of maternal protection | Line list |
+| 3 | Nutritional status (MUAC, SAM) and adenovirus or other co-infection testing | Comorbidity burden reported on the call | Hospitals, IEDCR lab |
+| 3 | PCR results and genotype; the phylogenetic analysis | Introductions and timing (a molecular clock could date the undetected period, which also informs aim 1) | IEDCR, WHO regional lab |
+| 3 | MICS 2019 district indicators: breastfeeding, wasting, vaccination | District covariates finer than DHS divisions | UNICEF MICS (reports public; microdata on registration) |
+| 3 | Surveillance beyond hospitals | How much of the outbreak is invisible | IEDCR |

@@ -1,12 +1,12 @@
 # Vaccination and intervention priorities: directions for analysis
 
-Draft for discussion, 30 September 2026. Each direction is framed as the decision it would inform, the data it needs, and whether public data are enough to start.
+Draft for discussion, 30 September 2026. This is the thinking behind aim 2 (campaign impact) and parts of aim 3 in `plan.md`; both are on hold until aim 1 is further on, and their data needs are listed in `first-steps.md`. Each direction is framed as the decision it would inform, the data it needs, and whether public data are enough to start.
 
 ## Context
 
 - Routine MR1 and MR2 services were disrupted in 2024 and 2025, and one of the two vitamin A rounds in 2025 was missed (UNICEF, WHO).
 - 81% of cases are under five and 34% under nine months (WHO SEARO, June), which is below the age of the routine first dose.
-- The national outbreak response campaign started on 5 April and in the camps on 26 April. DGHS reports administrative coverage by division of 107 to 117%.
+- Emergency campaign rounds in April (from 5 April) and May, a September mop-up, and the camp campaign from 26 April. WHO estimates 2 to 3 million eligible children were missed; there is no electronic registry to count the denominator. DGHS reports administrative coverage by division of 107 to 117%.
 - An administrative coverage above 100% means the target population was underestimated, or doses went outside the target age. Either way, it cannot be read as the share of children protected.
 
 ## Directions

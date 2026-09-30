@@ -1,6 +1,24 @@
-# Questions for the WHO regional office, 30 September 2026
+# Questions for WHO and IEDCR
 
-In priority order: the first four decide what the nowcast and CFR analysis can be. Details and reasons are in `plan.md` and `vaccination.md`.
+First asked at the WHO call on 30 September 2026. Updated after it for the next meeting, when the IEDCR director joins. Ordered by aim 1 first; the aim 2 and 3 data list is in `first-steps.md`.
+
+## Answered on the call
+
+| Question | Answer | Follow-up |
+|---|---|---|
+| Are admissions all hospitals, and are cases community or hospital? (7) | All reported cases are hospitalised | Which hospitals report, and has that changed over time? |
+| Are suspected and confirmed deaths separate? (6) | About 1,100 deaths in total, which matches 1,003 suspected + 101 confirmed | Confirm the two counts are disjoint |
+| Can cases be linked to outcomes? (2, 3) | Not yet; may be possible | Who holds the outcome data, and what key links them? |
+| When did the outbreak start? | First case January in the Cox's Bazar camps; spread from March and April; WHO informed in April | Any case data from January to March? |
+
+## New from the call
+
+- IEDCR analyses: can we see what has been done, and work on shared R code?
+- PCR: about a thousand PCR-confirmed cases against 21,392 confirmed by DGHS. What confirms the rest (IgM), and can PCR and genotype results be shared?
+- The phylogenetic analysis: who ran it, and are sequences with collection dates available?
+- Adenovirus: how is co-infection being tested, and in whom?
+- September mop-up campaign: dates, target ages and doses by district.
+- Any serosurvey, or community-level surveillance, in affected areas?
 
 ## Line list: nowcasting and CFR
 
