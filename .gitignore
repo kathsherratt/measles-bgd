@@ -67,3 +67,4 @@ data/covariates/wuenic_national.csv
 # Private working notes, including the prompt log
 local/
 .claude/settings.local.json
+data/who-monthly.csv

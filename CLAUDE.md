@@ -28,6 +28,8 @@ Rscript R/01-fetch-dghs.R        # DGHS press releases -> data/pdf/dghs/, data/m
 Rscript R/02-extract-dghs.R      # parse, correct, check -> data/dghs-daily.csv, -checks, -notes, -campaign-raw
 Rscript R/03-fetch-context.R     # WHO, UN, UNICEF, camp documents
 Rscript R/04-fetch-covariates.R  # HDX boundaries, population, DHS, WUENIC, camps
+Rscript R/05-fetch-dashboard.R   # DGHS platform, district daily counts; each run is a vintage (~30 min, run detached)
+Rscript R/06-fetch-who-monthly.R # WHO monthly surveillance counts; rerun monthly for vintages
 ```
 
 Things that are easy to get wrong in `02`:
@@ -48,6 +50,8 @@ Things that are easy to get wrong in `02`:
 
 ## Data access notes
 
+- `measles.dghs.gov.bd` is the facility reporting platform. Only read the public dashboard endpoints (`/api/reports/summary`, `/api/reports/geo`, `/api/public/*`), throttled to one request a second. Never call `/api/public/submit`, sign in, or touch `/api/admin/*`.
+- The platform and WHO monthly series disagree on the epidemic's trajectory after May; do not merge them.
 - ReliefWeb API returns 403 without an approved `appname`; its website blocks plain fetches.
 - `dashboard.dghs.gov.bd` returns 403 from outside Bangladesh.
 - WHO SEARO bulletins: the index lists only the latest issue; issues are probed by number.

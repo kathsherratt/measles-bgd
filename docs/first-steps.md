@@ -8,6 +8,11 @@ Focus: aim 1, real-time outbreak size and risk (`plan.md`). Aims 2 and 3 are dat
 
 The national daily count has sat near 1,000 hospitalised cases since April, but it is the sum of staggered division epidemics: Rajshahi fell from 216 to 26 a day between April and September while Sylhet rose from 46 to 152 and Chattogram from 159 to 252. Aim 1 is therefore a division-level analysis from the start.
 
+Two public sources change the picture (30 September):
+
+- The DGHS monitoring platform's dashboard exposes daily counts by district from 10 April, with serum samples sent, and returns the database's current values. District-level analysis is possible from public data, and rerunning `R/05` builds a true reporting triangle.
+- WHO's monthly surveillance counts (EPI case investigations, about 83,000 suspected in 2026, close to the 89,253 line-list records) show a different epidemic from the hospital series: measles cases peak at about 21,000 a month in April and May and fall to 5,234 in July, while DGHS hospital admissions stay near 30,000 a month to September. Explaining that gap (lagging case investigation, reporting delay by onset month, non-measles admissions, or a change in classification: epi-linked cases fall from about 16,000 a month in May to 14 in August) comes before any estimate of outbreak size.
+
 Order of work:
 
 1. Public data finished and checked (steps 1 and 2), with the Bangla review of priority 1 items.
@@ -52,7 +57,8 @@ Order of work:
 | Classify every failed continuity check as revision, source error or parse error | `assets/dghs-revisions.csv` | Footnotes |
 | Extract a camp series from the context documents | `data/camps-measles.csv`: suspected, confirmed, epi-linked, deaths and admissions as reported (Health Sector monthly bulletins April to July, WHO regional bulletins, UN RCO sitreps) | Public camp surveillance bulletins give no camp-level numbers (only W36 2026 is public, and its map is binned), so a weekly camp series needs WHO |
 | Parse age, vaccination status and camp figures from the WHO, UNICEF and UN documents | `data/context-figures.csv`, each row with document, page and quote | |
-| WHO provisional monthly measles data for Bangladesh, 2012 to date ([WHO immunization data portal](https://immunizationdata.who.int/global?topic=Provisional-measles-and-rubella-data)) | `data/who-monthly.csv`: suspected and confirmed cases by month | Covers January to March 2026, before the DGHS series, and the pre-outbreak baseline |
+| WHO provisional monthly measles data for Bangladesh, 2012 to date: done, `R/06-fetch-who-monthly.R` | `data/who-monthly.csv` | Rerun monthly to build vintages |
+| DGHS platform daily district counts: done, `R/05-fetch-dashboard.R` | `data/dghs-dashboard.csv`, appended with `fetched_at` per run | Rerun weekly (full) to build vintages |
 
 Acceptance test: every release date from 2 April to 29 September is either parsed, or listed with a reason (no release, quarantined, manual).
 

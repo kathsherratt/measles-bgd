@@ -19,6 +19,8 @@ First asked at the WHO call on 30 September 2026. Updated after it for the next 
 - Adenovirus: how is co-infection being tested, and in whom?
 - September mop-up campaign: dates, target ages and doses by district.
 - Any serosurvey, or community-level surveillance, in affected areas?
+- Two streams, two epidemics: WHO monthly surveillance (EPI case investigations) falls from about 21,000 measles cases a month in April and May to 5,234 in July, while DGHS hospital admissions stay near 30,000 a month to September. Why? Is case investigation behind, is classification changing (epi-linked cases drop from about 16,000 in May to 14 in August), or are more admissions not measles?
+- The DGHS monitoring platform: which units report (about 94 a day), since when, and are past values revised in place? Is a history of edits kept?
 
 ## Line list: nowcasting and CFR
 

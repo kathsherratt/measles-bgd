@@ -20,6 +20,8 @@ Work in progress. Nothing here has been reviewed by DGHS or WHO. Authors are not
 |---|---|---|---|
 | DGHS daily measles press releases, 2 April 2026 onwards | `R/01-fetch-dghs.R`, `R/02-extract-dghs.R` | `data/manifest-dghs.csv`; `data/dghs-daily.csv` and checks | Manifest only. Extracted figures are not published until terms are agreed with DGHS/WHO; run the scripts to regenerate them. |
 | WHO, UN RCO, UNICEF and Rohingya response documents | `R/03-fetch-context.R` | `data/manifest-context.csv` | Manifest only |
+| DGHS measles monitoring platform (public dashboard), daily by district from 10 April | `R/05-fetch-dashboard.R` | `data/dghs-dashboard.csv` | No, as for the press releases |
+| WHO provisional monthly measles surveillance, 2012 onwards | `R/06-fetch-who-monthly.R` | `data/who-monthly.csv` | No (CC BY-NC-SA 3.0 IGO) |
 | HDX: boundaries, population, DHS, WUENIC, camp outlines, wasting | `R/04-fetch-covariates.R` | `data/covariates/` | Openly licensed files only; DHS and WHO extracts held back pending licence check |
 | Measles parameters from the literature | `data/parameters/` | epireview-style register | Yes. Extracted by an LLM, not yet checked by a person. |
 
