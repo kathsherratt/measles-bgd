@@ -10,7 +10,7 @@ The national daily count has sat near 1,000 hospitalised cases since April, but 
 
 Two public sources change the picture (30 September):
 
-- The DGHS monitoring platform's dashboard exposes daily counts by district from 10 April, with serum samples sent, and returns the database's current values. District-level analysis is possible from public data, and rerunning `R/05` builds a true reporting triangle.
+- The DGHS monitoring platform's dashboard exposes daily counts by district from 10 April, with serum samples sent, with corrections placed on the right days. District-level analysis is possible from public data. Published days are not revised later, so there is no public reporting triangle (`plan.md`).
 - WHO's monthly surveillance counts (EPI case investigations, about 83,000 suspected in 2026, close to the 89,253 line-list records) show a different epidemic from the hospital series: measles cases peak at about 21,000 a month in April and May and fall to 5,234 in July, while DGHS hospital admissions stay near 30,000 a month to September. Explaining that gap (lagging case investigation, reporting delay by onset month, non-measles admissions, or a change in classification: epi-linked cases fall from about 16,000 a month in May to 14 in August) comes before any estimate of outbreak size.
 
 Order of work:
@@ -58,7 +58,7 @@ Order of work:
 | Extract a camp series from the context documents | `data/camps-measles.csv`: suspected, confirmed, epi-linked, deaths and admissions as reported (Health Sector monthly bulletins April to July, WHO regional bulletins, UN RCO sitreps) | Public camp surveillance bulletins give no camp-level numbers (only W36 2026 is public, and its map is binned), so a weekly camp series needs WHO |
 | Parse age, vaccination status and camp figures from the WHO, UNICEF and UN documents | `data/context-figures.csv`, each row with document, page and quote | |
 | WHO provisional monthly measles data for Bangladesh, 2012 to date: done, `R/06-fetch-who-monthly.R` | `data/who-monthly.csv` | Rerun monthly to build vintages |
-| DGHS platform daily district counts: done, `R/05-fetch-dashboard.R` | `data/dghs-dashboard.csv`, appended with `fetched_at` per run | Rerun weekly (full) to build vintages |
+| DGHS platform daily district counts: done, `R/05-fetch-dashboard.R` | `data/dghs-dashboard.csv`, appended with `fetched_at` per run | Rerun with `--from` for new days; a full rerun occasionally, to detect changes of practice |
 
 Acceptance test: every release date from 2 April to 29 September is either parsed, or listed with a reason (no release, quarantined, manual).
 

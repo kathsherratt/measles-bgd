@@ -33,7 +33,7 @@ What the call established that changes the analysis:
 | Source | Content | Time | Space | Format | Status |
 |---|---|---|---|---|---|
 | DGHS daily measles press release ([listing](https://dghs.gov.bd/pages/press-releases)) | Suspected and confirmed cases, suspected and confirmed deaths, admissions, discharges; 24h and cumulative since 15 March | Daily from 2 April, 8am to 8am | National; division from mid-April; the single division and district with most deaths that day | PDF with text layer | `R/01-fetch-dghs.R` downloads all 170 |
-| DGHS measles monitoring platform ([dashboard](https://measles.dghs.gov.bd/dashboard)), JSON behind the public dashboard | Same measures as the press releases plus serum samples sent to the lab; reporting-unit count | Daily from 10 April, including days with no press release | Division and all 64 districts | JSON | `R/05-fetch-dashboard.R`. Serves current database values, so each run is a vintage (10 May: 1,503 suspected in the press release, 1,414 on the platform now). Cox's Bazar is one reporting unit, so camps are not separable. |
+| DGHS measles monitoring platform ([dashboard](https://measles.dghs.gov.bd/dashboard)), JSON behind the public dashboard | Same measures as the press releases plus serum samples sent to the lab; reporting-unit count | Daily from 10 April, including days with no press release | Division and all 64 districts | JSON | `R/05-fetch-dashboard.R`. Serves current database values. Identical to the press releases from June; earlier differences are corrections DGHS moved back to the right day (see below). Cox's Bazar is one reporting unit, so camps are not separable. |
 | WHO provisional monthly measles and rubella data ([portal](https://immunizationdata.who.int/global?topic=Provisional-measles-and-rubella-data), table 404) | Suspected, clinical, epi-linked, lab-confirmed measles; rubella; discarded | Monthly, 2012 onwards | National | xlsx | `R/06-fetch-who-monthly.R`. From EPI case-based surveillance, not hospital reporting. Wayback holds no 2026 copies, so vintages start now. |
 | DGHS press release, MR campaign pages | Target, doses given, coverage | Daily from about 1 May | Division; 12 city corporations | Same PDFs | Same |
 | WHO SEARO weekly epidemiological bulletin ([week 26](https://cdn.who.int/media/docs/default-source/searo/whe/wherepib/2026_13_searo_epi_bulletin.pdf)) | Weekly summary built on the DGHS releases; camp totals | Weekly | National; camps | PDF | To fetch |
@@ -156,6 +156,21 @@ A reporting triangle needs the same quantity reported more than once as it is re
 | WHO regional office weekly bulletins | Daily national series plotted from the DGHS releases | Only if DGHS revised its back series, which it does not publish | Week 26 read |
 
 There is no public vintage of a series indexed by onset or report date, so no public reporting triangle and no public reporting-delay distribution. Dated line-list extracts from WHO are the only route. Any weekly exports WHO has kept since April would be a ready-made set of vintages.
+
+### Press releases against the dashboard: no truncation after publication
+
+Compared on 30 September for 126 days (2 April to 7 August), by division and measure (`local/scratch/truncation.R`):
+
+| Period | Dashboard against press release | Explanation |
+|---|---|---|
+| 2 to 7 April | Empty on 2 to 5 April; 10,878 suspected and 126 suspected deaths on 7 April | Platform launched 26 April; the data before it were loaded onto 7 April |
+| 8 April to 14 May | About 130 fewer suspected a day nationally; Rajshahi 24% lower in April and 40% lower in May | The 18 May Rajshahi duplicate removal, which the press releases showed as a one-day drop, was spread back over the days it belonged to |
+| 9 May | 46 more suspected deaths | The jump the press release showed on 10 May, placed on 9 May |
+| June to 7 August | Identical in 3,666 of 3,672 comparisons; the exception is 3 August in Khulna (+6) | The 3 August press release disagreed with itself by the same 6 cases; the dashboard holds the fix |
+
+Once published, a day's count does not change: backlog reporting is off and edits close at 14:32 Dhaka time. A late report is counted on the day it arrives. So the public report-date series is not right-truncated, but it carries reporting delay invisibly: any lag between a child's rash and their hospital report shows up as a shift in the report date. Only the line list can measure that delay.
+
+For analysis, the dashboard series is the better input: it carries the corrections on the right days, where the press releases show them as one-day jumps.
 
 ### What aggregate public data can still show
 

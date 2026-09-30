@@ -14,10 +14,15 @@
 #'   - districts, not only divisions;
 #'   - serum samples sent to the lab, from May;
 #'   - days with no press release;
-#'   - the database's current values, not those published on the day. The
-#'     10 May press release gave 1,503 suspected cases; the dashboard now gives
-#'     1,414. Each run is therefore a vintage, and repeated runs build the
-#'     reporting triangle that no other public source provides.
+#'   - the database's current values. Compared with the press releases
+#'     (30 September), these differ only where DGHS moved a correction back
+#'     to the day it belonged to: the back-fill of 15 March to 7 April onto
+#'     7 April when the platform launched (26 April), the Rajshahi duplicate
+#'     removal spread over April and early May, and a single 6-case fix on
+#'     3 August. From June a published day never changes: backlog reporting
+#'     is off and edits close at 14:32, so a late report counts on the day it
+#'     arrives. Repeated runs will therefore rarely differ; they are kept to
+#'     detect any change of practice, not to build a reporting triangle.
 #' Cox's Bazar reports as one unit (the civil surgeon office), so camps cannot
 #' be separated here.
 #'
@@ -31,8 +36,9 @@
 #' Usage:
 #'     Rscript R/05-fetch-dashboard.R [--from YYYY-MM-DD] [--to YYYY-MM-DD]
 #'
-#' Defaults: from 2026-04-01 to yesterday. A full run is about 1,600 requests
-#' at one a second, so run it detached.
+#' Defaults: from 2026-04-01 to yesterday. A full run is about 1,600 requests;
+#' the server takes about 6 seconds each, so a full run is 2 to 3 hours. Run it
+#' detached, and use --from for incremental updates.
 
 suppressMessages({
     library(data.table)
