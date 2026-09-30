@@ -4,18 +4,24 @@ Guidance for Claude Code in this repository. Global preferences (writing style, 
 
 ## Project
 
-Analysis of the 2026 measles outbreak in Bangladesh, run with WHO and the Ministry of Health: a public machine-readable record, nowcasting (`epinowcast`), CFR (`cfrnow`), and vaccination and intervention priorities. Refugee camps and malnutrition are cross-cutting priorities. Public and private (WHO line list) analyses run side by side.
+Analysis of the 2026 measles outbreak in Bangladesh, with WHO and the Ministry of Health. Three modelling aims were agreed with WHO on 30 September 2026:
 
-Read first: `docs/first-steps.md` (priorities and conventions), then `docs/plan.md`. Open questions for WHO are in `docs/who-questions.md`.
+1. Real-time outbreak size and risk (Rt, nowcast with `epinowcast`, size including unhospitalised infections). The current focus.
+2. Impact of the vaccination campaigns (April and May rounds, September mop-up). Data gathering only for now.
+3. Unusual features (cases under 6 months, infections among the vaccinated, malnutrition and co-infection; severity with `cfrnow`). Data gathering only for now.
+
+Refugee camps and malnutrition are cross-cutting. Public and private (WHO line list) analyses run side by side. IEDCR (government) is a likely partner and works in R, so code should run on their machines.
+
+Read first: `docs/first-steps.md` (priorities, conventions, data needed for aims 2 and 3), then `docs/plan.md`. Open questions for WHO and IEDCR are in `docs/who-questions.md`.
 
 ## Hard rules
 
 - Never commit, print in full, or copy out of `assets/local/`. It holds WHO/MoH material (data dictionary, case investigation form, later the line list). The repo is public.
 - Never commit extracted DGHS figures (`data/dghs-*.csv`) until publication terms are agreed. Manifests with source URLs and hashes are fine.
-- Never commit `data/covariates/dhs_division.csv` or `wuenic_national.csv` until their licences are checked.
+- Never commit `data/covariates/dhs_division.csv` or `wuenic_national.csv` until their licences are checked, or `data/who-monthly.csv` (CC BY-NC-SA 3.0 IGO).
 - Commit locally with conventional commits; never push without being asked.
 - No language model reads numbers from source documents. Extraction is by script from the PDF text layer. An LLM may propose, a person confirms.
-- `local/` is private working notes, including `local/prompt-log.md` (prompts are appended by a hook in `.claude/settings.local.json`).
+- `local/` is private: `local/prompt-log.md` (prompts appended by a hook in `.claude/settings.local.json`), call notes (they name individuals), and exploratory scripts in `local/scratch/`.
 
 ## Bengali
 
@@ -32,13 +38,23 @@ Rscript R/05-fetch-dashboard.R   # DGHS platform, district daily counts from 10 
 Rscript R/06-fetch-who-monthly.R # WHO monthly surveillance counts; rerun monthly for vintages
 ```
 
+Running `R/05`: the platform publishes each day at 16:41 Dhaka time (11:41 BST), all at once; before then today returns zeros. Update with `--from <last date>`. The server takes about 6 s a request, so a full run is 2 to 3 hours: run it detached. Never edit a script while a detached `Rscript` is running it: R reads the file as it goes, and the edit breaks the remaining steps.
+
 Things that are easy to get wrong in `02`:
 
 - The division table has three column layouts (A: 4 April to 5 May, B: 6 to 9 May, C: 10 May on). The layout is chosen per release by `layout_ok()` against the total row, not by date. Changing that function changes every value.
 - The date of record is the footer date, not the URL slug.
 - Hand corrections go in `assets/dghs-corrections.csv` with reason and evidence. Do not patch values in code.
 - Failed continuity checks are often real DGHS revisions (explained in footnotes, `data/dghs-notes.csv`). Record them; do not "fix" them.
-- Whether suspected deaths include confirmed deaths is unresolved (`bangla-review.md` item 4). Severity outputs carry both readings.
+- Whether suspected deaths include confirmed deaths is unresolved (`bangla-review.md` item 4), though WHO's total of about 1,100 deaths points to separate counts. Severity outputs carry both readings.
+
+## What the data are (findings to keep in mind)
+
+- All reported cases are hospitalised cases (WHO call). DGHS counts are admissions, not infections.
+- DGHS press releases and the platform dashboard are the same data. Published days are final; the platform puts corrections on the right days, so prefer it. There is no public reporting triangle.
+- WHO monthly surveillance is a different stream (EPI case investigations, close to the line list). From June it stopped epi-linking and tests nearly every suspect, so its fall after May is partly a change in classification. Among tested suspects, lab positivity is 45 to 70% (1 to 7% in 2025).
+- The national daily count (about 1,000) is the sum of staggered division epidemics; work by division.
+- Details and numbers are in `docs/plan.md`.
 
 ## Conventions
 
