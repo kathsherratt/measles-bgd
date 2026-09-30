@@ -63,3 +63,7 @@ data/raw/
 # Covariates whose licence ("Other" on HDX) needs checking before publishing
 data/covariates/dhs_division.csv
 data/covariates/wuenic_national.csv
+
+# Private working notes, including the prompt log
+local/
+.claude/settings.local.json
