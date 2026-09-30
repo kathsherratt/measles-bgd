@@ -112,6 +112,34 @@ External validation: WHO's DON598 figures for 15 April (19,161 suspected; 2,973 
 
 Every reading of Bengali that a person should confirm is listed in `bangla-review.md`.
 
+## Suspected against confirmed: ascertainment signals
+
+First look, 30 September (`local/scratch/ascertainment.R`; WHO August is incomplete).
+
+| Month 2026 | WHO investigated suspects | Share tested | Lab positivity | Epi-linked share of measles | DGHS hospital cases per WHO suspect | DGHS confirmed / suspected | DGHS suspected deaths / suspected |
+|---|---|---|---|---|---|---|---|
+| April | 27,198 | 0.42 | 0.45 | 0.75 | 1.3 | 0.13 | 0.0042 |
+| May | 24,126 | 0.33 | 0.61 | 0.77 | 1.5 | 0.12 | 0.0060 |
+| June | 13,140 | 0.55 | 0.62 | 0.57 | 2.3 | 0.10 | 0.0043 |
+| July | 7,148 | 0.89 | 0.70 | 0.15 | 3.8 | 0.15 | 0.0045 |
+| August | 2,604 | 0.99 | 0.65 | 0.01 | 11.4 | 0.11 | 0.0046 |
+
+Baseline 2025: lab positivity 0.01 to 0.07. Lab positivity is lab-confirmed / (lab-confirmed + discarded). DGHS confirmed / suspected is not a positivity: on the dashboard dates fetched so far (April and May), about 41% of hospital suspects had serum sent, and confirmations lag.
+
+What this supports:
+
+- Among tested suspects, most are measles (45 to 70%, against 1 to 7% before the outbreak). There is no sign of large-scale non-measles dilution in the tested population through August. Caveats: who gets tested is selected; vaccine-induced IgM after the campaign rounds can produce positives; specimens taken within 3 days of rash give false negatives.
+- The WHO series changed how it classifies cases. From June, epi-linking all but stops and nearly every investigated suspect is tested, so the WHO count shrinks to roughly the number of lab tests (6,000 to 7,000 a month). Its fall from May is at least partly this change, not only a fall in incidence. It cannot be read as the epidemic curve after May.
+- The DGHS hospital count is therefore not shown to be over-ascertained by the gap with WHO; the gap widens because the WHO series narrowed.
+- Suspected deaths per suspected case stay flat at 0.4 to 0.6%. Heavy dilution with milder non-measles admissions would lower this, so it is weak evidence against dilution (weak because non-measles fever and rash in hospitalised children is not necessarily milder).
+- Confirmed deaths fall to 2 or 3 a month from June while suspected deaths continue at about 4 a day, so deaths have stopped being lab-confirmed. Whether they are measles deaths cannot be told from public data.
+
+Signals to watch for over-ascertainment:
+
+- September's DGHS confirmed / suspected ratio is the lowest (0.07), in dengue season. Once the dashboard backfill is complete, confirmed per serum sample by district separates less testing from lower positivity. DGHS dengue press releases (same listing) give a comparison series.
+- Duplicates and referrals: the 18 May removal of 4,340 duplicate records at one hospital shows double counting happens. A child referred between facilities may be counted twice. Ask.
+- Rubella is not the explanation: 100 to 250 rubella cases a month.
+
 ## Reporting delays in public data
 
 ### Vintages
