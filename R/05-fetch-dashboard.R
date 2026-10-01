@@ -2,6 +2,12 @@
 #'
 #' Fetch daily district-level counts from the DGHS measles monitoring platform.
 #'
+#' This is the primary DGHS series; the press releases (`R/02`) are secondary.
+#' The dashboard's Excel export is built in the browser from the same JSON
+#' (a "today" call with `date` and a cumulative call with `to`), so this
+#' script fetches what the export holds, plus serum samples and the
+#' reporting-unit count, which the export drops.
+#'
 #' https://measles.dghs.gov.bd is the platform through which reporting units
 #' (district civil surgeon offices and hospitals, about 94 a day) submit their
 #' daily figures. Its public dashboard reads JSON from `/api/reports/summary`,

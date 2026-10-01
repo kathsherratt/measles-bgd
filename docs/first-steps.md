@@ -58,7 +58,8 @@ Order of work:
 | Extract a camp series from the context documents | `data/camps-measles.csv`: suspected, confirmed, epi-linked, deaths and admissions as reported (Health Sector monthly bulletins April to July, WHO regional bulletins, UN RCO sitreps) | Public camp surveillance bulletins give no camp-level numbers (only W36 2026 is public, and its map is binned), so a weekly camp series needs WHO |
 | Parse age, vaccination status and camp figures from the WHO, UNICEF and UN documents | `data/context-figures.csv`, each row with document, page and quote | |
 | WHO provisional monthly measles data for Bangladesh, 2012 to date: done, `R/06-fetch-who-monthly.R` | `data/who-monthly.csv` | Rerun monthly to build vintages |
-| DGHS platform daily district counts: done, `R/05-fetch-dashboard.R` | `data/dghs-dashboard.csv`, appended with `fetched_at` per run | Rerun with `--from` for new days; a full rerun occasionally, to detect changes of practice |
+| DGHS platform daily district counts, the primary DGHS series: done, `R/05-fetch-dashboard.R` | `data/dghs-dashboard.csv`, appended with `fetched_at` per run | Rerun with `--from` for new days; a full rerun occasionally, to detect changes of practice |
+| Dashboard against press releases: done, `R/07-compare-dghs-sources.R` | `data/dghs-source-compare.csv` | Rerun after each `R/05` and `R/02` update |
 
 Acceptance test: every release date from 2 April to 29 September is either parsed, or listed with a reason (no release, quarantined, manual).
 

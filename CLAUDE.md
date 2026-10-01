@@ -36,6 +36,7 @@ Rscript R/03-fetch-context.R     # WHO, UN, UNICEF, camp documents
 Rscript R/04-fetch-covariates.R  # HDX boundaries, population, DHS, WUENIC, camps
 Rscript R/05-fetch-dashboard.R   # DGHS platform, district daily counts from 10 April (full run 2 to 3 h, run detached)
 Rscript R/06-fetch-who-monthly.R # WHO monthly surveillance counts; rerun monthly for vintages
+Rscript R/07-compare-dghs-sources.R # dashboard against press releases -> data/dghs-source-compare.csv
 ```
 
 Running `R/05`: the platform publishes each day at 16:41 Dhaka time (11:41 BST), all at once; before then today returns zeros. Update with `--from <last date>`. The server takes about 6 s a request, so a full run is 2 to 3 hours: run it detached. Never edit a script while a detached `Rscript` is running it: R reads the file as it goes, and the edit breaks the remaining steps.
@@ -51,7 +52,7 @@ Things that are easy to get wrong in `02`:
 ## What the data are (findings to keep in mind)
 
 - All reported cases are hospitalised cases (WHO call). DGHS counts are admissions, not infections.
-- DGHS press releases and the platform dashboard are the same data. Published days are final; the platform puts corrections on the right days, so prefer it. There is no public reporting triangle.
+- The platform dashboard (`R/05`) is the primary DGHS source: it is what DGHS publishes as data (its Excel export is built from the same JSON). The press releases are the same counts and are secondary: used for the period before the platform, footnotes, campaign tables, and cross-checks. Published days are final; the platform puts corrections on the right days. There is no public reporting triangle.
 - WHO monthly surveillance is a different stream (EPI case investigations, close to the line list). From June it stopped epi-linking and tests nearly every suspect, so its fall after May is partly a change in classification. Among tested suspects, lab positivity is 45 to 70% (1 to 7% in 2025).
 - The national daily count (about 1,000) is the sum of staggered division epidemics; work by division.
 - Details and numbers are in `docs/plan.md`.

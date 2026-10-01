@@ -2,6 +2,13 @@
 #'
 #' Extract daily counts from the DGHS measles press releases.
 #'
+#' The press releases are the secondary DGHS source. The platform dashboard
+#' (`R/05`) is primary: it holds the same counts, by district, with
+#' corrections on the right days. The releases are kept for the national series
+#' before the platform (15 March to 9 April, which the dashboard loads onto
+#' 7 April), the footnotes explaining revisions, the campaign tables, and as a
+#' cross-check (`R/07`).
+#'
 #' Reads the PDFs listed in data/manifest-dghs.csv with pdftools. Numbers are
 #' read from the text layer; no model is involved. Bengali labels come out
 #' garbled by a legacy font encoding, in 37 spellings of 9 row names across the
