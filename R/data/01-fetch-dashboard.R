@@ -2,7 +2,8 @@
 #'
 #' Fetch daily district-level counts from the DGHS measles monitoring platform.
 #'
-#' This is the primary DGHS series; the press releases (`sitrep/R/02-extract.R`) are secondary.
+#' This is the primary DGHS series; the press releases
+#' (`sitrep/R/02-extract.R`) are secondary.
 #' The dashboard's Excel export is built in the browser from the same JSON
 #' (a "today" call with `date` and a cumulative call with `to`), so this
 #' script fetches what the export holds, plus serum samples and the

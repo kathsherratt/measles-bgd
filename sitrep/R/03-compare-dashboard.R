@@ -11,8 +11,8 @@
 #' (`docs/plan.md`). If a new run departs from that, look before changing
 #' anything: it may be a change of practice at DGHS.
 #'
-#' The dashboard's latest vintage is used. National dashboard values are the
-#' sum of the divisions. Serum samples are dashboard-only and dropped.
+#' The dashboard series is data/dghs-cases.csv (latest vintage, national is the
+#' sum of the divisions). Serum samples are dashboard-only and dropped.
 #'
 #' Output (gitignored until publication terms are agreed):
 #'   sitrep/data/dghs-source-compare.csv  date, geography, measure, release,
@@ -25,28 +25,21 @@ suppressMessages(library(data.table))
 
 OUT <- here::here("sitrep", "data", "dghs-source-compare.csv")
 
-# Dashboard field names to press-release measure names.
-MEASURES <- c(suspected24h = "suspected", confirmed24h = "confirmed",
-              admitted24h = "admitted", discharged24h = "discharged",
-              suspectedDeath24h = "suspected_deaths",
-              confirmedDeath24h = "confirmed_deaths")
-
-# Dashboard spelling to press-release spelling.
-GEOGRAPHY <- c(Barisal = "Barishal")
+# Measures the press releases carry; serum_sent is dashboard-only.
+MEASURES <- c("suspected", "confirmed", "admitted", "discharged",
+              "suspected_deaths", "confirmed_deaths")
 
 # ----------------------------------------------------------------- read ----
 
-dash <- fread(here::here("data", "dghs-dashboard.csv"))[level == "division"]
-dash <- dash[fetched_at == max(fetched_at), by = .(date)]
-dash <- dash[measure %in% names(MEASURES)]
-dash[, measure := MEASURES[measure]]
-dash[geography %in% names(GEOGRAPHY), geography := GEOGRAPHY[geography]]
-dash <- rbind(
-    dash[, .(date, geography, measure, value)],
-    dash[, .(geography = "Total", value = sum(value)), by = .(date, measure)]
-)
+# Canonical dashboard series (R/data/02-tidy-dashboard.R): one vintage, one
+# spelling, national = sum of divisions. The releases call national "Total".
+dash <- fread(here::here("data", "dghs-cases.csv"))[
+    level %in% c("division", "national") & measure %in% MEASURES]
+dash[, geography := fifelse(level == "national", "Total", division)]
+dash <- dash[, .(date, geography, measure, value)]
 
-pr <- fread(here::here("sitrep", "data", "dghs-daily.csv"))[period == "24h" & !is.na(value),
+pr <- fread(here::here("sitrep", "data", "dghs-daily.csv"))[
+    period == "24h" & !is.na(value),
     .(date = report_date, geography, measure, release = value)]
 
 m <- merge(pr, dash[, .(date, geography, measure, dashboard = value)],
