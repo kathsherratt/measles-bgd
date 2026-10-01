@@ -2,7 +2,7 @@
 #'
 #' Fetch daily district-level counts from the DGHS measles monitoring platform.
 #'
-#' This is the primary DGHS series; the press releases (`R/02`) are secondary.
+#' This is the primary DGHS series; the press releases (`sitrep/R/02-extract.R`) are secondary.
 #' The dashboard's Excel export is built in the browser from the same JSON
 #' (a "today" call with `date` and a cumulative call with `to`), so this
 #' script fetches what the export holds, plus serum samples and the
@@ -40,7 +40,7 @@
 #' `fetched_at` so vintages can be compared.
 #'
 #' Usage:
-#'     Rscript R/05-fetch-dashboard.R [--from YYYY-MM-DD] [--to YYYY-MM-DD]
+#'     Rscript R/data/01-fetch-dashboard.R [--from YYYY-MM-DD] [--to YYYY-MM-DD]
 #'
 #' Defaults: from 2026-04-01 to yesterday. A full run is about 1,600 requests;
 #' the server takes about 6 seconds each, so a full run is 2 to 3 hours. Run it

@@ -17,7 +17,7 @@
 #' Output: data/who-monthly.csv (gitignored: WHO terms are CC BY-NC-SA 3.0 IGO).
 #'
 #' Usage:
-#'     Rscript R/06-fetch-who-monthly.R
+#'     Rscript R/data/03-fetch-who-monthly.R
 
 suppressMessages({
     library(data.table)

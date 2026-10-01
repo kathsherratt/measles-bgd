@@ -45,7 +45,7 @@
 #'                    2021.
 #'
 #' Usage:
-#'     Rscript R/04-fetch-covariates.R [--refresh]
+#'     Rscript R/data/05-fetch-covariates.R [--refresh]
 #'
 #' `--refresh` re-downloads files already on disk.
 

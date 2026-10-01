@@ -36,7 +36,7 @@
 #' `note`, so gaps are visible in the manifest.
 #'
 #' Usage:
-#'     Rscript R/03-fetch-context.R [--refresh]
+#'     Rscript R/data/04-fetch-context.R [--refresh]
 #'
 #' `--refresh` re-downloads files already on disk.
 
