@@ -35,6 +35,8 @@ Rscript R/data/05-fetch-covariates.R   # HDX boundaries, population, DHS, WUENIC
 
 Data scripts live in `R/data/`, analysis scripts in `R/analysis/`, figures in `R/plots/`. Press-release extraction lives in `sitrep/` (see `sitrep/README.md`; its rules are in `sitrep/CLAUDE.md`). Analysis reads `data/dghs-cases.csv` only, and reads sitrep outputs only through the named exports in `sitrep/README.md`.
 
+Daily update: `R/schedule/daily.sh` runs dashboard steps 01 to 02 (from the last date held) and `sitrep/R/01` to `03`, logging to `outputs/logs/daily_*.log`. launchd runs it at 12:30 London time (`R/schedule/uk.kathsherratt.measles-bgd.daily.plist`, installed in `~/Library/LaunchAgents/`). Stop it with `launchctl bootout gui/$(id -u)/uk.kathsherratt.measles-bgd.daily`.
+
 Running `R/data/01-fetch-dashboard.R`: the platform publishes each day at 16:41 Dhaka time (11:41 BST), all at once; before then today returns zeros. Update with `--from <last date>`. The server takes about 6 s a request, so a full run is 2 to 3 hours: run it detached. Never edit a script while a detached `Rscript` is running it: R reads the file as it goes, and the edit breaks the remaining steps.
 
 ## What the data are (findings to keep in mind)
