@@ -27,41 +27,37 @@ Order of work:
 
 | Convention | Choice | Why |
 |---|---|---|
-| Scripts | Numbered `R/NN-verb-object.R`, data.table, one job each (fetch, extract, fit, summarise), run with `Rscript` | Matches `bvd-sitreps`; each step can be rerun alone |
-| Orchestration | `R/main.R` runs steps in order; no `targets` for now | Few steps, fast; revisit when fits multiply (`targets` is not installed) |
+| Scripts | Numbered `R/data/NN-verb-object.R` and `R/analysis/NN-verb-object.R`, data.table, one job each (fetch, extract, fit, summarise), run with `Rscript` | Matches `bvd-sitreps`; each step can be rerun alone |
+| Orchestration | `R/main.R` runs the main pipeline, `R/data/01` to `R/data/05`, in order; no `targets` for now | Few steps, fast; revisit when fits multiply (`targets` is not installed) |
 | Packages | `renv` lockfile, committed | Collaborators get the same `epinowcast`, `epidist` and `cfrnow` versions; all three are pre-1.0 and change often |
 | Paths | `here::here()` | Runs from any working directory |
-| Data layers | `data/pdf/` (raw, gitignored), `data/*.csv` (extracted, gitignored until terms agreed), `data/covariates/` (open, committed), `assets/` (hand-curated: corrections, templates), `assets/local/` (private, gitignored) | Raw is refetchable; private never leaves the machine |
+| Data layers | `data/pdf/` (raw, gitignored), `data/dghs-*.csv` (dashboard series, gitignored until terms agreed), `sitrep/` (press-release extraction, with its own gitignored data), `data/covariates/` (open, committed), `assets/` (hand-curated: corrections, templates), `assets/local/` (private, gitignored) | Raw is refetchable; private never leaves the machine |
 | Long jobs | `nohup caffeinate -is Rscript ... > outputs/logs/<step>_<date>.log 2>&1 &`, then poll the log | Fits outlast the IDE host |
 | Caching | Each fit saved as `outputs/fits/<model>_<geography>_<cutoff>.rds`; reused if present | A crash costs one fit, and every cutoff is kept for real-time evaluation |
 | Parameters | Read from `data/parameters/`, never typed into scripts | One place to update a prior; each value has a citation |
 | Reporting | Quarto, `reports/` rendering from saved outputs only, never refitting | Rendering stays fast; figures match the fits on disk |
-| Review | `docs/bangla-review.md` for Bengali; corrections in `assets/dghs-corrections.csv` with reason and evidence | Human checks are traceable |
+| Review | `sitrep/docs/bangla-review.md` for Bengali; corrections in `sitrep/assets/corrections.csv` with reason and evidence | Human checks are traceable |
 | Commits | Conventional commits, one step per commit, local only until you push | |
 
 ## Step 0: housekeeping (half a day)
 
 1. `renv::init()` and commit `renv.lock`.
-2. `R/main.R` running 01 to 04 in order, with `--daily` doing fetch and extract only.
+2. `R/main.R` running `R/data/01` to `R/data/05` in order, with `--daily` doing fetch and tidy only.
 3. README: purpose, data sources with licences, how to run, where private data go, and the no-publication rule for extracted DGHS data.
-4. `data/README.md`: a data dictionary for `dghs-daily.csv`, `dghs-checks.csv` and `dghs-notes.csv`.
+4. `data/README.md`: a data dictionary for `dghs-cases.csv` and `dghs-cases-checks.csv`. Done.
 
 ## Step 1: finish the public data (1 to 2 days, partly with Bangla reviewers)
 
 | Task | Output | Blocked by |
 |---|---|---|
-| Bangla review of the priority 1 items in `bangla-review.md` | Reviewer initials and outcomes | Reviewers |
-| Transcribe 6 April by hand | `assets/dghs-manual.csv`, read by `02` | Reviewers |
-| Translate the 22 footnotes | `translation` column in `data/dghs-notes.csv`; revisions listed in `assets/dghs-revisions.csv` with cause | Reviewers |
-| Label the campaign tables | `data/dghs-campaign.csv`: division and city corporation, target, doses, coverage, by date | Item 12 in the review log |
-| Classify every failed continuity check as revision, source error or parse error | `assets/dghs-revisions.csv` | Footnotes |
 | Extract a camp series from the context documents | `data/camps-measles.csv`: suspected, confirmed, epi-linked, deaths and admissions as reported (Health Sector monthly bulletins April to July, WHO regional bulletins, UN RCO sitreps) | Public camp surveillance bulletins give no camp-level numbers (only W36 2026 is public, and its map is binned), so a weekly camp series needs WHO |
 | Parse age, vaccination status and camp figures from the WHO, UNICEF and UN documents | `data/context-figures.csv`, each row with document, page and quote | |
-| WHO provisional monthly measles data for Bangladesh, 2012 to date: done, `R/06-fetch-who-monthly.R` | `data/who-monthly.csv` | Rerun monthly to build vintages |
-| DGHS platform daily district counts, the primary DGHS series: done, `R/05-fetch-dashboard.R` | `data/dghs-dashboard.csv`, appended with `fetched_at` per run | Rerun with `--from` for new days; a full rerun occasionally, to detect changes of practice |
-| Dashboard against press releases: done, `R/07-compare-dghs-sources.R` | `data/dghs-source-compare.csv` | Rerun after each `R/05` and `R/02` update |
+| WHO provisional monthly measles data for Bangladesh, 2012 to date: done, `R/data/03-fetch-who-monthly.R` | `data/who-monthly.csv` | Rerun monthly to build vintages |
+| DGHS platform daily district counts, the primary DGHS series: done, `R/data/01-fetch-dashboard.R` and `R/data/02-tidy-dashboard.R` | `data/dghs-dashboard.csv`, appended with `fetched_at` per run; `data/dghs-cases.csv`, the latest vintage, with checks | Rerun with `--from` for new days; a full rerun occasionally, to detect changes of practice |
 
-Acceptance test: every release date from 2 April to 29 September is either parsed, or listed with a reason (no release, quarantined, manual).
+The press-release tasks (Bangla review, 6 April transcription, footnote translation, campaign tables, revision classification) are in `sitrep/README.md`.
+
+Acceptance test: `data/dghs-cases-checks.csv` has no failures other than documented ones, and every date from 10 April to the latest has all divisions.
 
 ## Step 2: parameters (1 day, then ongoing)
 
@@ -89,10 +85,10 @@ Following the five questions of descriptive epidemiology. Each display has a tit
 | When | Monthly WHO surveillance counts from January (before DGHS daily reporting starts), then daily suspected cases by report date, 7-day mean, eight division panels on a shared log scale; campaign start (5 April; camps 26 April) and known revisions marked | Report date is a surrogate for onset; state it. Mark Saturday releases (Friday reporting). Bin daily, which is well under half the incubation period. |
 | Where | Choropleth of cumulative suspected incidence per 100,000 by division, closed legend; campaign coverage by division and city corporation as a dot plot | Division is the smallest unit with both numerator and denominator publicly |
 | Among whom | Age shares from WHO and UNICEF documents (81% under five, 34% under nine months) | Line list later |
-| Severity | Admission ratio by division; hospital outcome ratio, deaths / (deaths + discharges), by division; naive and delay-adjusted CFR (`cfr` package); all under both death definitions (nested and disjoint, `bangla-review.md` item 4) | Hospital outcome ratio is well defined without follow-up, but only if deaths are hospital deaths (ask WHO). Wasting (DHS 2022) is shown alongside, descriptively, with no regression: 8 divisions and confounding by access and age mix make any fitted slope misleading. |
+| Severity | Admission ratio by division; hospital outcome ratio, deaths / (deaths + discharges), by division; naive and delay-adjusted CFR (`cfr` package); all under both death definitions (nested and disjoint, `sitrep/docs/bangla-review.md` item 4) | Hospital outcome ratio is well defined without follow-up, but only if deaths are hospital deaths (ask WHO). Wasting (DHS 2022) is shown alongside, descriptively, with no regression: 8 divisions and confounding by access and age mix make any fitted slope misleading. |
 | Camps | Weekly camp series against Cox's Bazar district and national, per 100,000 | Denominators: UNHCR registration |
 
-Scripts: `R/10-describe.R` writes figure data and tables to `outputs/describe/`; `reports/describe.qmd` renders them.
+Scripts: `R/analysis/10-describe.R` writes figure data and tables to `outputs/describe/`; `reports/describe.qmd` renders them.
 
 ## Step 4: growth and transmission from public data (2 to 3 days)
 
@@ -125,12 +121,12 @@ The first output is a range with its assumptions stated, not a point estimate. T
 
 The analysis code can be written and tested now, so it runs the day the data land. Keep the simulation minimal: its job is to test code against the real schema, not to be realistic.
 
-1. `R/20-simulate-linelist.R`: a line list with exactly the 33 columns of the WHO data dictionary, onset from the step 4 fits, and delays and CFR from step 2. It includes known quirks: about half with lab dates, age with DOB mostly missing, a death date in free text.
-2. `R/21-clean-linelist.R`: dates parsed and validated (fever before rash, notification after onset, and so on); death date parsed from `Comment` and flagged; age groups; camp flag from Ukhia, Teknaf and Hatiya (Bhasan Char) upazilas. Writes a tidy line list and a data-quality table.
-3. `R/22-triangle.R`: reporting triangles by onset (rash) and report date (database entry date if provided, else `DNOT`), grouped national, division, and camp against non-camp; a second triangle for lab confirmation. Same `triangle.csv` layout as `bvd-analysis`.
-4. `R/23-delays.R`: `epidist` fits for each delay in `plan.md` (onset to notification, notification to investigation, onset to specimen, specimen to result), stratified by division and month, with right truncation at the extract date.
-5. `R/24-nowcast.R`: `epinowcast`, reusing `bvd-analysis` `nc_fit()` structure.
-6. `R/25-cfr.R`: `cfrnow` with `cfr ~ age_group + vaccinated + (1 | division) + s(time)`, death-only.
+1. `R/analysis/20-simulate-linelist.R`: a line list with exactly the 33 columns of the WHO data dictionary, onset from the step 4 fits, and delays and CFR from step 2. It includes known quirks: about half with lab dates, age with DOB mostly missing, a death date in free text.
+2. `R/analysis/21-clean-linelist.R`: dates parsed and validated (fever before rash, notification after onset, and so on); death date parsed from `Comment` and flagged; age groups; camp flag from Ukhia, Teknaf and Hatiya (Bhasan Char) upazilas. Writes a tidy line list and a data-quality table.
+3. `R/analysis/22-triangle.R`: reporting triangles by onset (rash) and report date (database entry date if provided, else `DNOT`), grouped national, division, and camp against non-camp; a second triangle for lab confirmation. Same `triangle.csv` layout as `bvd-analysis`.
+4. `R/analysis/23-delays.R`: `epidist` fits for each delay in `plan.md` (onset to notification, notification to investigation, onset to specimen, specimen to result), stratified by division and month, with right truncation at the extract date.
+5. `R/analysis/24-nowcast.R`: `epinowcast`, reusing `bvd-analysis` `nc_fit()` structure.
+6. `R/analysis/25-cfr.R`: `cfrnow` with `cfr ~ age_group + vaccinated + (1 | division) + s(time)`, death-only.
 7. Tests: the delay and CFR fits recover simulated parameters within their 90% intervals. This checks the code only; it says nothing about bias in the real data.
 8. When real data arrive, first: discard rate, and rubella IgM positivity, by week and division. Dengue peaks in September, so suspected cases will increasingly include non-measles fever and rash. Key analyses on suspected cases, repeated on confirmed plus epi-linked cases.
 

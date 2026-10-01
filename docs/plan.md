@@ -14,7 +14,7 @@ Agreed with WHO on 30 September 2026 (call notes, not in the repository):
 
 Cross-cutting: Rohingya camps reported separately wherever data allow (the first case was in the Cox's Bazar camps in January), and malnutrition as a driver of severity.
 
-The public record (`R/01` to `R/04`) serves all three aims.
+The public record (`R/data/01` to `R/data/05`, and `sitrep/` for the press releases) serves all three aims.
 
 What the call established that changes the analysis:
 
@@ -32,9 +32,9 @@ What the call established that changes the analysis:
 
 | Source | Content | Time | Space | Format | Status |
 |---|---|---|---|---|---|
-| DGHS measles monitoring platform ([dashboard](https://measles.dghs.gov.bd/dashboard)), JSON behind the public dashboard. Primary DGHS source. | Same measures as the press releases plus serum samples sent to the lab; reporting-unit count | Daily from 10 April, including days with no press release | Division and all 64 districts | JSON | `R/05-fetch-dashboard.R`. Serves current database values. The dashboard's Excel export is built in the browser from the same JSON, so it adds nothing; it drops serum samples and calls discharges "recovered". Identical to the press releases from June; earlier differences are corrections DGHS moved back to the right day (see below). Cox's Bazar is one reporting unit, so camps are not separable. |
-| DGHS daily measles press release ([listing](https://dghs.gov.bd/pages/press-releases)) | Suspected and confirmed cases, suspected and confirmed deaths, admissions, discharges; 24h and cumulative since 15 March | Daily from 2 April, 8am to 8am | National; division from mid-April; the single division and district with most deaths that day | PDF with text layer | `R/01-fetch-dghs.R` downloads all 170. Secondary: used for the period before the platform, footnotes on revisions, campaign figures, and as a cross-check (`R/07`). |
-| WHO provisional monthly measles and rubella data ([portal](https://immunizationdata.who.int/global?topic=Provisional-measles-and-rubella-data), table 404) | Suspected, clinical, epi-linked, lab-confirmed measles; rubella; discarded | Monthly, 2012 onwards | National | xlsx | `R/06-fetch-who-monthly.R`. From EPI case-based surveillance, not hospital reporting. Wayback holds no 2026 copies, so vintages start now. |
+| DGHS measles monitoring platform ([dashboard](https://measles.dghs.gov.bd/dashboard)), JSON behind the public dashboard. Primary DGHS source. | Same measures as the press releases plus serum samples sent to the lab; reporting-unit count | Daily from 10 April, including days with no press release | Division and all 64 districts | JSON | `R/data/01-fetch-dashboard.R`. Serves current database values. The dashboard's Excel export is built in the browser from the same JSON, so it adds nothing; it drops serum samples and calls discharges "recovered". Identical to the press releases from June; earlier differences are corrections DGHS moved back to the right day (see below). Cox's Bazar is one reporting unit, so camps are not separable. |
+| DGHS daily measles press release ([listing](https://dghs.gov.bd/pages/press-releases)) | Suspected and confirmed cases, suspected and confirmed deaths, admissions, discharges; 24h and cumulative since 15 March | Daily from 2 April, 8am to 8am | National; division from mid-April; the single division and district with most deaths that day | PDF with text layer | `sitrep/R/01-fetch.R` downloads all 170. Secondary: used for the period before the platform, footnotes on revisions, campaign figures, and as a cross-check (`sitrep/R/03-compare-dashboard.R`). |
+| WHO provisional monthly measles and rubella data ([portal](https://immunizationdata.who.int/global?topic=Provisional-measles-and-rubella-data), table 404) | Suspected, clinical, epi-linked, lab-confirmed measles; rubella; discarded | Monthly, 2012 onwards | National | xlsx | `R/data/03-fetch-who-monthly.R`. From EPI case-based surveillance, not hospital reporting. Wayback holds no 2026 copies, so vintages start now. |
 | DGHS press release, MR campaign pages | Target, doses given, coverage | Daily from about 1 May | Division; 12 city corporations | Same PDFs | Same |
 | WHO SEARO weekly epidemiological bulletin ([week 26](https://cdn.who.int/media/docs/default-source/searo/whe/wherepib/2026_13_searo_epi_bulletin.pdf)) | Weekly summary built on the DGHS releases; camp totals | Weekly | National; camps | PDF | To fetch |
 | WHO Disease Outbreak News ([DON598](https://www.who.int/emergencies/disease-outbreak-news/item/2026-DON598)) | Narrative, age, vaccination status | Occasional | National | WHO API | Reuse `bvd-sitreps` `06-fetch-who.R` |
@@ -76,41 +76,7 @@ HDX `cod-ab-bgd` (boundaries, adm0 to adm4, 2026), `cod-ps-bgd` (population adm1
 
 ## DGHS extraction design
 
-The press releases carry most of the public signal, and extracting them is the hard part.
-
-Findings from the first look:
-
-- Text layer present in every file checked. Numbers read cleanly with `pdftools`. Digits are sometimes ASCII, sometimes Bengali, sometimes mixed within a single number (`2৩১`).
-- Bengali labels are garbled by a legacy font encoding (Unicode fonts on some pages, SutonnyMJ ASCII glyphs on others, e.g. `MZ 24 N›Uvq`). Labels cannot be matched by exact string.
-- The division table has 12 columns: six measures, first for the last 24h and then cumulative since 15 March. The column order changed twice. Each period was identified by matching the total row against the next day's cumulatives.
-
-  | Layout | Releases | 24h columns | Cumulative columns |
-  |---|---|---|---|
-  | 0 | 2 to 3 April | National only (SutonnyMJ glyphs on 3 April) | National only |
-  | A | 4 April to 5 May | suspected, admitted, discharged, suspected deaths, confirmed, confirmed deaths | same order as 24h |
-  | B | 6 to 9 May | as A | suspected, admitted, discharged, confirmed, confirmed deaths, suspected deaths |
-  | C | 10 May onwards | suspected, suspected deaths, confirmed, confirmed deaths, admitted, discharged | same order as 24h |
-
-  Page 1 national headline blocks change independently of this: suspected and confirmed deaths swap position between May and September. The campaign tables start around 1 May, with 24h doses at first and cumulative only by September.
-- Cumulatives are revised. Suspected cases fell from 57,846 (release labelled 17 May) to 54,911 (labelled 18 May), then continued rising from the lower base. Revisions have to be flagged, not treated as errors. They are also the only public signal of backfill.
-- Slug dates are unreliable. Five dates appear twice, and each sits next to a missing day (9 April twice, 10 April missing; 18 May twice, 19 May missing). Early September slugs drop the leading zero. The reporting window printed on page 1 is the date of record.
-- Some releases contain errors. The 11 August release repeats the cumulative figures in place of the 24h columns. There are gaps with no release (e.g. 15 to 18 September), where only the sum of 24h counts can be recovered, from the cumulatives on either side.
-- 6 April was downloaded empty on the first run and has been refetched. The manifest lists the remaining gaps.
-
-Implemented in `R/02-extract-dghs.R` (29 September):
-
-1. Deterministic parse of the `pdftools` text layer; no LLM. Rows are matched to divisions on stable substrings of the garbled labels (37 spellings of 9 names).
-2. The layout is chosen per release by testing A, B and C against the total row: 24h ≤ cumulative, suspected ≥ confirmed ≥ confirmed deaths, admitted ≥ discharged, suspected deaths under 10% of suspected. Anything other than exactly one fitting layout goes to quarantine. The result agrees with the date ranges found by hand (A 31 releases, B 4, C 132).
-3. Checks: divisions sum to the total; page 1 equals the total row; cumulative(t) = cumulative(t-1) + 24h(t). Failures are recorded, not corrected.
-4. Hand corrections in `assets/dghs-corrections.csv`, each with reason and evidence (13 May truncated number; 11 August 24h columns; 1 May division cumulatives).
-5. Footnotes and starred values written verbatim to `data/dghs-notes.csv` for translation. They explain several revisions.
-6. Outputs: `data/dghs-daily.csv` (long: `report_date, date_source, geography, measure, period, value, value_raw, correction, layout, source, file`), `data/dghs-checks.csv`, `data/dghs-notes.csv`, `data/dghs-campaign-raw.csv`, `data/quarantine/dghs.csv`.
-
-Status: 169 of 170 releases parsed (6 April needs manual transcription). The footer date resolved every duplicate slug. No release is listed for 11 days (9, 23 and 29 July; 19 August; 7, 12, 13 and 15 to 18 September); for those, only the sum of 24h counts across the gap is recoverable. 139 of 8,440 continuity checks fail, clustered in early April and at documented revisions (10, 18, 23 May; 3 to 4 August).
-
-External validation: WHO's DON598 figures for 15 April (19,161 suspected; 2,973 confirmed; 166 suspected deaths; 12,318 admissions; 9,772 discharges) and the WHO regional bulletin's for 28 June (99,207; 11,710; 619; 93) match the extracted values exactly.
-
-Every reading of Bengali that a person should confirm is listed in `bangla-review.md`.
+The press releases are the secondary DGHS source. Their extraction design, layouts and checks are in `sitrep/docs/extraction.md`.
 
 ## Suspected against confirmed: ascertainment signals
 
@@ -159,7 +125,7 @@ There is no public vintage of a series indexed by onset or report date, so no pu
 
 ### Press releases against the dashboard: no truncation after publication
 
-Compared on 1 October for 168 days (2 April to 29 September), by division and measure (`R/07-compare-dghs-sources.R`):
+Compared on 1 October for 168 days (2 April to 29 September), by division and measure (`sitrep/R/03-compare-dashboard.R`):
 
 | Period | Dashboard against press release | Explanation |
 |---|---|---|
@@ -235,7 +201,7 @@ Things that will bias the estimate if not handled:
 - Case definition. CFR among lab-confirmed cases is biased if testing favours severe cases. Report CFR for suspected, confirmed and clinically compatible cases separately.
 - Changes over time. The MR campaign, vitamin A and case management changed during the outbreak, so `cfr` gets a smooth on time.
 - Benchmark. The aggregate delay-adjusted CFR and hospital outcome ratio from public data, by division, and a naive CFR among line-list cases with onset more than 30 days before the cutoff. Six months in, most cases have resolved. `cfrnow` earns its place for the recent tail and for CFR changing over time; it is weakly identified otherwise, since it rests on the delay prior.
-- Death definitions. Until item 4 of `bangla-review.md` is settled, every CFR is reported for both readings (suspected deaths inclusive of confirmed, or separate).
+- Death definitions. Until item 4 of `sitrep/docs/bangla-review.md` is settled, every CFR is reported for both readings (suspected deaths inclusive of confirmed, or separate).
 - Line-list CFR is a lower bound where deaths are found only in free text or missing; calibrate against the DGHS death count.
 
 ## What the case investigation data add
@@ -261,18 +227,27 @@ Consolidated, in priority order, in `who-questions.md`.
 ## Repository layout
 
 ```
-R/01-fetch-dghs.R         DGHS press releases       -> data/pdf/dghs/, data/manifest-dghs.csv
-R/02-extract-dghs.R       parse, correct, check     -> data/dghs-*.csv (gitignored)
-R/03-fetch-context.R      WHO, UN, UNICEF, camps    -> data/pdf/context/, data/manifest-context.csv
-R/04-fetch-covariates.R   HDX                       -> data/covariates/
-assets/dghs-corrections.csv   hand corrections with evidence
-assets/local/             WHO/MoH material, gitignored
-data/parameters/          measles parameter register (epireview schema)
-docs/plan.md              this file
-docs/first-steps.md       next two weeks, step by step
-docs/vaccination.md       directions for vaccination and intervention analysis
-docs/who-questions.md     questions for WHO
-docs/bangla-review.md     readings for Bengali speakers to confirm
+R/data/01-fetch-dashboard.R    DGHS platform dashboard   -> data/dghs-dashboard.csv (raw vintages)
+R/data/02-tidy-dashboard.R     latest vintage, checks    -> data/dghs-cases.csv, data/dghs-cases-checks.csv
+R/data/03-fetch-who-monthly.R  WHO monthly counts        -> data/who-monthly.csv
+R/data/04-fetch-context.R      WHO, UN, UNICEF, camps    -> data/pdf/context/, data/manifest-context.csv
+R/data/05-fetch-covariates.R   HDX                       -> data/covariates/
+R/analysis/                    analysis scripts (not yet written)
+R/plots/                       figure scripts (not yet written)
+sitrep/                        press-release extraction, self-contained (README.md, CLAUDE.md)
+  R/01-fetch.R                 press releases            -> sitrep/data/pdf/dghs/, sitrep/data/manifest-dghs.csv
+  R/02-extract.R               parse, correct, check     -> sitrep/data/dghs-*.csv (gitignored)
+  R/03-compare-dashboard.R     against data/dghs-cases.csv -> sitrep/data/dghs-source-compare.csv
+  assets/corrections.csv       hand corrections with evidence
+  docs/extraction.md           extraction design
+  docs/bangla-review.md        readings for Bengali speakers to confirm
+assets/local/                  WHO/MoH material, gitignored
+data/README.md                 data dictionary
+data/parameters/               measles parameter register (epireview schema)
+docs/plan.md                   this file
+docs/first-steps.md            next two weeks, step by step
+docs/vaccination.md            directions for vaccination and intervention analysis
+docs/who-questions.md          questions for WHO
 ```
 
 Public and private analyses sit side by side. Private data stay under a gitignored path, and only aggregates approved for release leave it.

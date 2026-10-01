@@ -1,6 +1,6 @@
 # Bangla review log
 
-Places where the extraction depends on reading Bengali that is garbled, partly legible, or interpreted by a non-Bengali reader (Claude, unreviewed). Each item says what was assumed and how to check it against the PDF. Please record the reviewer's initials and outcome in the last column, and note any correction in `assets/dghs-corrections.csv`.
+Places where the extraction depends on reading Bengali that is garbled, partly legible, or interpreted by a non-Bengali reader (Claude, unreviewed). Each item says what was assumed and how to check it against the PDF. Please record the reviewer's initials and outcome in the last column, and note any correction in `sitrep/assets/corrections.csv`.
 
 The DGHS PDFs use a legacy font encoding, so their text layer reads as scrambled Bengali (e.g. `সমরিত রিয়ন্ত্রণ সকন্দ্র` for সমন্বিত নিয়ন্ত্রণ কেন্দ্র) or, on 3 April, as SutonnyMJ ASCII (`MZ 24 N›Uvq`). The printed page is correct; only the text layer is garbled. Always check against the rendered PDF, not the extracted text.
 
@@ -18,7 +18,7 @@ The DGHS PDFs use a legacy font encoding, so their text layer reads as scrambled
 
 ## Priority 2: footnotes
 
-`data/dghs-notes.csv` holds 22 footnotes and 14 starred values, verbatim from the text layer, with empty `translation` and `reviewed_by` columns. Please translate from the PDF, not the CSV. Tentative readings, used in the plan and not yet relied on in code:
+`sitrep/data/dghs-notes.csv` holds 22 footnotes and 14 starred values, verbatim from the text layer, with empty `translation` and `reviewed_by` columns. Please translate from the PDF, not the CSV. Tentative readings, used in the plan and not yet relied on in code:
 
 | Date | Tentative reading | Why it matters |
 |---|---|---|
@@ -34,16 +34,16 @@ The DGHS PDFs use a legacy font encoding, so their text layer reads as scrambled
 
 | # | Item | What the code assumes | How to check | Reviewer |
 |---|---|---|---|---|
-| 8 | Division row labels | 37 spellings mapped to 8 divisions plus the total by substring (`division_of()` in `R/02-extract-dghs.R`), e.g. বসরশাে, িনরশাল, বন শাে → Barishal; নসন্দলট, রিললট → Sylhet; সমাট, রমাট, যমাট → total | Spot-check the row order on page 2 of 15 April, 1 May, 29 September | |
+| 8 | Division row labels | 37 spellings mapped to 8 divisions plus the total by substring (`division_of()` in `sitrep/R/02-extract.R`), e.g. বসরশাে, িনরশাল, বন শাে → Barishal; নসন্দলট, রিললট → Sylhet; সমাট, রমাট, যমাট → total | Spot-check the row order on page 2 of 15 April, 1 May, 29 September | |
 | 9 | Release date | Footer date (dd-mm-yyyy) on the last page; slug date where there is none (1 and 2 May, 30 May, 11, 15 and 28 July) | Compare with the header date on page 1 | |
 | 10 | Reporting window | 8am previous day to 8am on the release date | Page 1 sentence "... সকাল 8:00 টা থেকে ..." | |
 | 11 | Data source line | Until mid-April "MIS, DGHS"; from then "Health Emergency Operation Centre and Control Room, DGHS" | Page 1 source line, 2 and 15 April | |
-| 12 | Campaign tables | Not yet labelled. Numbers kept raw in `data/dghs-campaign-raw.csv`. Assumed columns: target, cumulative vaccinated, coverage %; in May also 24h target, 24h vaccinated, 24h coverage | Campaign table headers, 1 May and 29 September | |
+| 12 | Campaign tables | Not yet labelled. Numbers kept raw in `sitrep/data/dghs-campaign-raw.csv`. Assumed columns: target, cumulative vaccinated, coverage %; in May also 24h target, 24h vaccinated, 24h coverage | Campaign table headers, 1 May and 29 September | |
 | 13 | City corporation rows | Matched on garbled forms of কর্পোরেশন | Page 3 of 29 September | |
 
 ## Needs manual transcription
 
 | Date | Problem |
 |---|---|
-| 6 April | Text layer wraps the Dhaka row over two lines, so the division table cannot be parsed. Transcribe page 2 into `assets/dghs-manual.csv` (not yet created). |
+| 6 April | Text layer wraps the Dhaka row over two lines, so the division table cannot be parsed. Transcribe page 2 into `sitrep/assets/manual.csv` (not yet created). |
 | 3 April | SutonnyMJ encoding on page 1; values parsed but unverified |
