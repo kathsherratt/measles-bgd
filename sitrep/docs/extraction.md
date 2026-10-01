@@ -1,6 +1,6 @@
 # DGHS extraction design
 
-The press releases carry most of the public signal, and extracting them is the hard part.
+The press releases are the secondary DGHS source; the platform dashboard is primary. They are still needed for the period before the platform, the footnotes, the campaign tables and the cross-check, and extracting them is the hard part.
 
 Findings from the first look:
 
