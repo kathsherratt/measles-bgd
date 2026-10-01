@@ -3,13 +3,14 @@
 #' Extract daily counts from the DGHS measles press releases.
 #'
 #' The press releases are the secondary DGHS source. The platform dashboard
-#' (`R/05`) is primary: it holds the same counts, by district, with
-#' corrections on the right days. The releases are kept for the national series
-#' before the platform (15 March to 9 April, which the dashboard loads onto
-#' 7 April), the footnotes explaining revisions, the campaign tables, and as a
-#' cross-check (`R/07`).
+#' (`R/data/01-fetch-dashboard.R`) is primary: it holds the same counts, by
+#' district, with corrections on the right days. The releases are kept for the
+#' national series before the platform (15 March to 9 April, which the
+#' dashboard loads onto 7 April), the footnotes explaining revisions, the
+#' campaign tables, and as a cross-check (`sitrep/R/03-compare-dashboard.R`).
 #'
-#' Reads the PDFs listed in data/manifest-dghs.csv with pdftools. Numbers are
+#' Reads the PDFs listed in sitrep/data/manifest-dghs.csv with pdftools. Numbers
+#' are
 #' read from the text layer; no model is involved. Bengali labels come out
 #' garbled by a legacy font encoding, in 37 spellings of 9 row names across the
 #' corpus, so rows are matched on stable substrings (`division_of()`), not on
@@ -26,7 +27,7 @@
 #' date is used only where the footer carries none, and the difference is
 #' flagged.
 #'
-#' Checks written to data/dghs-checks.csv:
+#' Checks written to sitrep/data/dghs-checks.csv:
 #'   - divisions sum to the total row, per column;
 #'   - page 1 national figures equal the total row;
 #'   - cumulative(t) = cumulative(t-1) + 24h(t), national and by division,
@@ -35,28 +36,28 @@
 #' suspected cases is a revision by DGHS, and is data.
 #'
 #' Outputs (gitignored until publication terms are agreed):
-#'   data/dghs-daily.csv          long: report_date, geography, measure,
-#'                                period, value, file
-#'   data/dghs-campaign-raw.csv   MR campaign rows, numbers unlabelled
-#'   data/dghs-checks.csv         one row per check
-#'   data/dghs-notes.csv          footnotes and starred values, in Bengali,
-#'                                with empty translation columns
-#'   data/quarantine/dghs.csv     releases that could not be parsed
+#'   sitrep/data/dghs-daily.csv         long: report_date, geography, measure,
+#'                                      period, value, file
+#'   sitrep/data/dghs-campaign-raw.csv  MR campaign rows, numbers unlabelled
+#'   sitrep/data/dghs-checks.csv        one row per check
+#'   sitrep/data/dghs-notes.csv         footnotes and starred values, in
+#'                                      Bengali, with empty translation columns
+#'   sitrep/data/quarantine/dghs.csv    releases that could not be parsed
 #'
 #' Usage:
-#'     Rscript R/02-extract-dghs.R
+#'     Rscript sitrep/R/02-extract.R
 
 suppressMessages({
     library(data.table)
 })
 
-MANIFEST <- here::here("data", "manifest-dghs.csv")
-OUT_DAILY <- here::here("data", "dghs-daily.csv")
-OUT_CAMPAIGN <- here::here("data", "dghs-campaign-raw.csv")
-OUT_CHECKS <- here::here("data", "dghs-checks.csv")
-OUT_NOTES <- here::here("data", "dghs-notes.csv")
-OUT_QUARANTINE <- here::here("data", "quarantine", "dghs.csv")
-CORRECTIONS <- here::here("assets", "dghs-corrections.csv")
+MANIFEST <- here::here("sitrep", "data", "manifest-dghs.csv")
+OUT_DAILY <- here::here("sitrep", "data", "dghs-daily.csv")
+OUT_CAMPAIGN <- here::here("sitrep", "data", "dghs-campaign-raw.csv")
+OUT_CHECKS <- here::here("sitrep", "data", "dghs-checks.csv")
+OUT_NOTES <- here::here("sitrep", "data", "dghs-notes.csv")
+OUT_QUARANTINE <- here::here("sitrep", "data", "quarantine", "dghs.csv")
+CORRECTIONS <- here::here("sitrep", "assets", "corrections.csv")
 
 MEASURES <- c("suspected", "admitted", "discharged", "suspected_deaths",
               "confirmed", "confirmed_deaths")

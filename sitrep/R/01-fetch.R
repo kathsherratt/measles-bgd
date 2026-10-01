@@ -12,10 +12,10 @@
 #'
 #' The date in the slug (ddmmyyyy in Bengali digits) is a filing label only.
 #' The reporting window a release covers is read from the document in
-#' 02-extract-dghs.R. Some dates are posted twice; both are kept.
+#' sitrep/R/02-extract.R. Some dates are posted twice; both are kept.
 #'
 #' Usage:
-#'     Rscript R/01-fetch-dghs.R [--refresh]
+#'     Rscript sitrep/R/01-fetch.R [--refresh]
 #'
 #' `--refresh` re-downloads files already on disk.
 
@@ -29,8 +29,8 @@ LISTING <- paste0(BASE, "/pages/press-releases")
 MAX_PAGES <- 60L
 MEASLES_PREFIX <- "হাম-প্রেস-রিলিজ"
 
-OUT_DIR <- here::here("data", "pdf", "dghs")
-MANIFEST <- here::here("data", "manifest-dghs.csv")
+OUT_DIR <- here::here("sitrep", "data", "pdf", "dghs")
+MANIFEST <- here::here("sitrep", "data", "manifest-dghs.csv")
 REFRESH <- "--refresh" %in% commandArgs(trailingOnly = TRUE)
 
 dir.create(OUT_DIR, recursive = TRUE, showWarnings = FALSE)

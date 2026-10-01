@@ -2,10 +2,10 @@
 #'
 #' Compare the DGHS platform dashboard with the DGHS press releases.
 #'
-#' The dashboard (`R/05`, the same data as its Excel export) is the primary
-#' DGHS series. The press releases (`R/02`) are kept as a cross-check. This
-#' script matches the two by date, division and 24h measure, nationally and by
-#' division, and summarises where they differ. Expected result (30 September):
+#' The dashboard (`R/data/01-fetch-dashboard.R`, the same data as its Excel
+#' export) is the primary DGHS series. The press releases
+#' (`sitrep/R/02-extract.R`) are kept as a cross-check. This script matches the two by date, division and
+#' 24h measure, nationally and by division, and summarises where they differ. Expected result (30 September):
 #' from June they are identical except 3 August in Khulna (+6), and earlier
 #' differences are corrections DGHS moved back to the day they belonged to
 #' (`docs/plan.md`). If a new run departs from that, look before changing
@@ -15,15 +15,15 @@
 #' sum of the divisions. Serum samples are dashboard-only and dropped.
 #'
 #' Output (gitignored until publication terms are agreed):
-#'   data/dghs-source-compare.csv  date, geography, measure, release,
-#'                                 dashboard, diff (dashboard - release)
+#'   sitrep/data/dghs-source-compare.csv  date, geography, measure, release,
+#'                                        dashboard, diff (dashboard - release)
 #'
 #' Usage:
-#'     Rscript R/07-compare-dghs-sources.R
+#'     Rscript sitrep/R/03-compare-dashboard.R
 
 suppressMessages(library(data.table))
 
-OUT <- here::here("data", "dghs-source-compare.csv")
+OUT <- here::here("sitrep", "data", "dghs-source-compare.csv")
 
 # Dashboard field names to press-release measure names.
 MEASURES <- c(suspected24h = "suspected", confirmed24h = "confirmed",
@@ -46,7 +46,7 @@ dash <- rbind(
     dash[, .(geography = "Total", value = sum(value)), by = .(date, measure)]
 )
 
-pr <- fread(here::here("data", "dghs-daily.csv"))[period == "24h" & !is.na(value),
+pr <- fread(here::here("sitrep", "data", "dghs-daily.csv"))[period == "24h" & !is.na(value),
     .(date = report_date, geography, measure, release = value)]
 
 m <- merge(pr, dash[, .(date, geography, measure, dashboard = value)],

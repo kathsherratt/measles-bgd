@@ -57,7 +57,12 @@ outputs/logs/
 data/dghs-*.csv
 data/quarantine/
 
-# Raw covariate downloads, refetchable via R/04-fetch-covariates.R
+# Same for the press-release (sitrep) extraction
+sitrep/data/pdf/
+sitrep/data/dghs-*.csv
+sitrep/data/quarantine/
+
+# Raw covariate downloads, refetchable via R/data/05-fetch-covariates.R
 data/raw/
 
 # Covariates whose licence ("Other" on HDX) needs checking before publishing
