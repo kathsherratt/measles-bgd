@@ -164,21 +164,19 @@ For analysis, the dashboard series is the better input: it carries the correctio
 
 ### Methods
 
-Two existing sources of method:
+The epinowcast suite in R: `primarycensored` (censoring and truncation), `epidist` (delays as `brms` models, covariates by formula), `epinowcast` (nowcast plus renewal), and `cfrnow` (an `epidist` model type).
 
-- `bdbv-linelist-analysis` (Julia, Turing, CensoredDistributions.jl) fits the atomic delays jointly, with shared per-case latent event times. Chained delays then add up case by case (onset to notification to specimen to result). It uses double interval censoring, compares Gamma, lognormal and Weibull by WAIC, lets strata shift the log-mean, and reports against the Charniga et al. 2024 checklist with a limitations page.
-- The epinowcast suite in R: `primarycensored` (censoring and truncation), `epidist` (delays as `brms` models, covariates by formula), `epinowcast` (nowcast plus renewal), and `cfrnow` (an `epidist` model type).
-
-Recommendation: fit each delay with `epidist` first. It sits on the same stack as `epinowcast` and `cfrnow`, runs in R, and takes stratifiers (division, age group, month, camp) by formula. It handles right truncation from each extract's cutoff. Port the `bdbv` joint-latent model only if chained delays need to add up per case, e.g. onset to confirmed result. The cost of the port is a second language and a Julia runtime. Follow the Charniga checklist and keep a limitations file in either case.
+- Fit each delay with `epidist` first
+- Follow the Charniga checklist and keep a limitations file
 
 ### Nowcast with `epinowcast`
 
 - Reference date: rash onset (`DOnsetR`). Report date: date of entry into the national database if WHO has it; otherwise `DNOT`, with the caveat that notification is not when a case became visible to analysts.
 - Triangles: (1) suspected cases by onset, (2) lab-confirmed cases by onset, reported at `DateMeaIgMResult`. The share tested (about 51% have `DateSpecSero`) has to be modelled or conditioned on, not assumed constant.
-- Expectation: renewal process with a measles generation interval (about 11 to 12 days), incubation as the latent reporting delay, and a random walk on growth by division, as in `bvd-analysis` `nc_fit()`. Report-day (weekday) effects on the reporting delay.
-- Structure: reuse the `bvd-analysis` split. An aggregation layer publishes `triangle.csv` with a `grouping` column (national, division, camp against non-camp), and the model stream reads it through `nc_triangle()`.
+- Expectation: renewal process with a measles generation interval (about 11 to 12 days), incubation as the latent reporting delay, and a random walk on growth by division. Report-day (weekday) effects on the reporting delay.
+- Structure: An aggregation layer publishes `triangle.csv` with a `grouping` column (national, division, camp against non-camp), and the model stream reads it through `nc_triangle()`.
 - Evaluation: with several extracts, rerun nowcasts as if in real time and score them against later extracts with `scoringutils`. With a single extract, only the reporting delay's stability over onset time can be checked.
-- The line list covers about 47% of DGHS suspected cases (89,253 against 190,510), probably least at the peak. A line-list nowcast estimates investigated cases, not incidence. Model the investigated fraction by division and week against the DGHS totals, and scale up with that uncertainty.
+- The line list covers about 47% of DGHS suspected cases (89,253 against 190,510). A line-list nowcast estimates investigated cases, not incidence. Model the investigated fraction by division and week against the DGHS totals, and scale up with that uncertainty.
 - Suspected cases are the primary series; confirmed cases reflect lab policy (once an area is confirmed, WHO guidance moves to epi-linkage). Measles among untested cases can be estimated from positivity by age, onset-to-specimen interval and week.
 
 ## CFR with `cfrnow`
