@@ -37,6 +37,7 @@ One row per check, date, division and measure. Failures are recorded, not correc
 - `who-monthly.csv`: WHO monthly surveillance counts (CC BY-NC-SA 3.0 IGO, not committed), from `R/data/03-fetch-who-monthly.R`.
 - `covariates/`: boundaries, population, DHS, WUENIC, UNICEF wasting, camp outlines, camp population (UNHCR, `camp_population.csv`) and hospitals (Healthsites.io from OpenStreetMap, ODbL, `hospitals.csv`), from `R/data/05-fetch-covariates.R`. Medical college hospitals are checked by hand in `assets/medical-colleges.csv` (government or private; the OSM list is incomplete). Two files are not committed until licences are checked.
 - `parameters/`: epireview-schema parameters extracted from the literature (see its README).
+- `context-figures.csv`, `camps-measles.csv`: candidate figures (age, vaccination status; camp counts) matched by `R/data/06-extract-context-figures.R` in the text of the context documents, each with its verbatim quote. Use only rows with `confirmed_by` filled.
 - `manifest-context.csv`: source URLs and hashes of context documents from `R/data/04-fetch-context.R`.
 - `manifest-covariates.csv`: source URLs and hashes of covariate downloads.
 - `raw/`: raw downloads, not committed.
