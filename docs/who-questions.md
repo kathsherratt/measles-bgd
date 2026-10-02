@@ -9,7 +9,7 @@ First asked at the WHO call on 30 September 2026. Updated after it for the next 
 | Are admissions all hospitals, and are cases community or hospital? (7) | All reported cases are hospitalised | Which hospitals report, and has that changed over time? |
 | Are suspected and confirmed deaths separate? (6) | About 1,100 deaths in total, which matches 1,003 suspected + 101 confirmed | Confirm the two counts are disjoint |
 | Can cases be linked to outcomes? (2, 3) | Not yet; may be possible | Who holds the outcome data, and what key links them? |
-| When did the outbreak start? | First case January in the Cox's Bazar camps; spread from March and April; WHO informed in April | Any case data from January to March? |
+| When did the outbreak start? | First case January in the Cox's Bazar camps; spread from March and April; WHO informed in April | See "Early data" below |
 
 ## New from the call
 
@@ -23,6 +23,16 @@ First asked at the WHO call on 30 September 2026. Updated after it for the next 
 - WHO monthly data: from June almost every investigated suspect is lab-tested and epi-linking all but stops. Was this a policy change, and did case investigation shrink to what the lab could test?
 - Hospital counts: can a child referred between facilities be counted twice? Are deaths tested?
 - The DGHS monitoring platform: which units report (about 94 a day), since when, and are past values revised in place? Is a history of edits kept?
+
+## Early data: before daily public reporting
+
+Daily DGHS counts are public from 2 April 2026 (press releases, national). The platform dashboard puts everything from 15 March to 7 April on one day, 7 April. Nothing daily is public before 2 April. Requests, in order of preference:
+
+- From October 2025: weekly or daily suspected and confirmed measles cases and deaths by district, from routine EPI case-based surveillance, by rash onset date and by notification date. This gives the baseline and the take-off.
+- From January 2026: the same, including Cox's Bazar camp cases (first cases were reported in the camps in January), with a camp identifier.
+- At least from 15 March 2026: daily DGHS counts by district for 15 March to 7 April, as on the platform after 7 April (suspected, confirmed, admitted, discharged, suspected and confirmed deaths), by report date.
+- Line-list records with onset date before 2 April, if those are easier to share than aggregates.
+- Why 15 March? What started then (a case definition, hospital reporting, the emergency operations centre), and were cases before 15 March counted anywhere?
 
 ## Line list: nowcasting and CFR
 
@@ -61,3 +71,8 @@ First asked at the WHO call on 30 September 2026. Updated after it for the next 
 18. Has a post-campaign coverage survey been done or planned? Administrative coverage is 107 to 117%, so it cannot be read as protection.
 19. Routine MR1 and MR2 coverage by district and month (the DGHS EPI dashboard is not reachable from outside Bangladesh).
 20. Is an early MR dose at 6 months (MR0) being given in outbreak areas?
+
+## Reporting units
+
+21. Which units are registered on the DGHS platform? Outside Dhaka division the daily report count equals the number of districts (civil surgeon offices); Dhaka division has 31 to 94 units a day. Do units with no cases submit a zero report?
+22. How do civil surgeon offices compile the daily figure: what is the cut-off time, and how long from facility to office? Is a facility's late report added to the day it arrives or the day it belongs to?

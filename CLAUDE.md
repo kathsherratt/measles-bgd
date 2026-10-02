@@ -49,7 +49,8 @@ Running `R/data/01-fetch-dashboard.R`: the platform publishes each day at 16:41 
 
 ## Conventions
 
-- R, `data.table`, numbered scripts `R/data/NN-verb-object.R`, `here::here()` paths, same comment style as `R/data/01-fetch-dashboard.R`. Matches `../bvd-sitreps`.
+- R, numbered scripts `R/data/NN-verb-object.R`, `here::here()` paths, same comment style as `R/data/01-fetch-dashboard.R`.
+- New code uses dplyr and tidyr with the native pipe (`|>`). `R/data/` stays in `data.table` (matches `../bvd-sitreps`); do not convert it.
 - Parameters come from `data/parameters/` (epireview schema, LLM-extracted, unreviewed until ticked), never typed into scripts.
 - Model fits (`epinowcast`, `epidist`, `cfrnow`) run detached with `nohup caffeinate -is` and a log in `outputs/logs/`, and are cached as `outputs/fits/<model>_<geography>_<cutoff>.rds`.
 - Reports render from saved outputs only, never refit.
