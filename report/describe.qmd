@@ -16,20 +16,6 @@ execute:
   message: false
 ---
 
-Specification: `docs/describe-spec.md`.
-Public data only.
-
-::: {.callout-note collapse="true"}
-## How this report is written
-
-- Titles state what, where and when. Source and units are in each caption.
-- Collapsed "Scaffold" boxes hold the numbers for each display's descriptive text, still to be written.
-- Deaths are shown under two readings until DGHS confirms how they count (`who-questions.md` Q6). A: suspected deaths include confirmed deaths. B: suspected and confirmed deaths are separate, so total = suspected + confirmed.
-- Place is the place of the reporting facility, not residence.
-:::
-
-# Setup and inputs
-
 ```{r}
 #| label: setup
 
@@ -38,12 +24,11 @@ library(dplyr)
 library(tidyr)
 library(lubridate)
 library(ggplot2)
+library(ggridges)
 library(plotly)
 library(sf)
 library(slider)
 library(knitr)
-library(cfr)
-library(stringr)
 
 # visualise-data palette
 col_primary <- "#1a1a1a"
@@ -55,22 +40,39 @@ theme_set(
 )
 sf_use_s2(FALSE)
 
-source_dghs <- "Source: DGHS measles monitoring platform (measles.dghs.gov.bd), report date."
+# Utility functions
+# MMWR epidemiological weeks, Sunday to Saturday, labelled by start date
+week_start_of <- function(date) floor_date(date, "week", week_start = 7)
+week_label <- function(week) {
+  paste0("week ", epiweek(week), " (", fmt_date(week), " to ",
+         fmt_date(week + 6), ")")
+}
+# Sum daily counts by complete epiweek, grouped by the columns in ...
+weekly <- function(d, ...) {
+  d |>
+    mutate(week = week_start_of(date)) |>
+    filter(between(week, first_week, last_week)) |>
+    group_by(..., week) |>
+    summarise(across(c(suspected, confirmed, serum_sent), sum),
+              .groups = "drop")
+}
+fmt <- function(x) format(round(x), big.mark = ",")
+fmt_date <- function(d, year = FALSE) {
+  paste(day(d), format(d, if (year) "%B %Y" else "%B"))
+}
 ```
 
-## Case series
-
-The dashboard series by report date.
-2 to 5 April are empty, and 7 April holds everything from 15 March to 7 April (`flag`), so daily series start on 8 April.
-Cumulative counts include the 7 April lump.
-
 ```{r}
-#| label: inputs-cases
+#| label: inputs
 
+# DGHS dashboard series by report date
 cases <- read.csv(here("data", "dghs-cases.csv"), na.strings = c("", "NA")) |>
   mutate(date = ymd(date))
 cutoff <- max(cases$date)
 first_daily <- ymd("2026-04-08")
+# First and last complete epiweeks of daily data
+first_week <- week_start_of(first_daily - 1) + 7
+last_week <- week_start_of(cutoff + 1) - 7
 
 # DGHS district spellings that differ from the OCHA boundaries
 district_recode <- c(
@@ -80,22 +82,13 @@ district_recode <- c(
 )
 cases <- cases |>
   mutate(district = recode(district, !!!district_recode))
-```
 
-Data cutoff: `r format(cutoff, "%d %B %Y")`.
-
-## Geography and population
-
-Divisions are ordered west to east by the longitude of their centroid, and districts the same way within each division.
-Population is the 2022 census projection (`cod-ps-bgd`), not adjusted for growth.
-
-```{r}
-#| label: inputs-geography
-
+# Boundaries and population (2022 census projection)
 adm1 <- st_read(here("data", "covariates", "bgd_adm1.geojson"), quiet = TRUE)
 adm2 <- st_read(here("data", "covariates", "bgd_adm2.geojson"), quiet = TRUE)
 lookup <- read.csv(here("data", "covariates", "admin_lookup.csv"))
 
+# Divisions west to east by centroid, and districts the same way within each
 centroid_lon <- function(g) {
   suppressWarnings(st_coordinates(st_centroid(g))[, 1])
 }
@@ -120,19 +113,10 @@ pop2 <- read.csv(here("data", "covariates", "population_adm2.csv")) |>
   left_join(select(lookup, adm2_pcode, district = adm2_name,
                    division = adm1_name),
             by = "adm2_pcode")
-
 stopifnot(
   setequal(pop1$division, unique(na.omit(cases$division))),
   setequal(pop2$district, unique(na.omit(cases$district)))
 )
-
-division_order
-```
-
-## Derived series
-
-```{r}
-#| label: inputs-derived
 
 # Wide daily series: one row per date and place, one column per measure
 widen <- function(d) {
@@ -140,61 +124,99 @@ widen <- function(d) {
     select(-fetched_at, -flag) |>
     pivot_wider(names_from = measure, values_from = value)
 }
+nat_daily <- cases |>
+  filter(level == "national") |>
+  widen()
 div_daily <- cases |>
   filter(level == "division") |>
   widen() |>
   mutate(division = factor(division, levels = division_order))
-nat_daily <- cases |>
-  filter(level == "national") |>
-  widen()
 dist_daily <- cases |>
   filter(level == "district") |>
   widen() |>
   mutate(district = factor(district, levels = district_order),
          division = factor(division, levels = division_order))
+# 15 March to 7 April, loaded onto 7 April as one total
+lump <- nat_daily |> filter(date == ymd("2026-04-07")) |> pull(suspected)
 
-# Weeks are 7-day blocks ending on the cutoff, so the last week is complete;
-# the first, partial block is dropped.
-week_end_of <- function(date) {
-  cutoff - 7 * floor(as.numeric(cutoff - date) / 7)
-}
-complete_weeks <- function(d) {
-  d |>
-    mutate(week_end = week_end_of(date)) |>
-    filter(week_end - 6 >= first_daily)
-}
-
-# Trailing 7-day sum, plotted at the window's last day
-trail7 <- function(x) slide_dbl(x, sum, .before = 6, .complete = TRUE)
-```
-
-## Events
-
-```{r}
-#| label: inputs-events
-
+# Events marked on time series
 events <- read.csv(here("assets", "events.csv")) |>
   mutate(date = ymd(date))
 events_marked <- events |>
   filter(!grepl("backfill", event))
-kable(events, caption = "Events marked on time series (assets/events.csv)")
+
+# WHO provisional monthly measles and rubella data
+who <- read.csv(here("data", "who-monthly.csv")) |>
+  mutate(month = make_date(year, month, 1)) |>
+  filter(year >= 2023)
+stopifnot(all(who$measles_suspect == who$measles_total + who$discarded))
 ```
 
-Not yet marked: campaign rounds by division (`who-questions.md` Q17) and the September mop-up dates.
+::: {.callout-note}
+# How to read this report
 
-# What
+- Data to `r fmt_date(cutoff, year = TRUE)`, from the DGHS measles monitoring platform unless stated. Public data only.
+- A case is a hospital admission with suspected measles. Counts are admissions, not infections.
+- Time is the date a count was reported, a surrogate for onset.
+- Place is the district of the reporting facility, not of residence.
+- Weeks are MMWR epidemiological weeks, Sunday to Saturday. Weekly plots show complete weeks only, from `r week_label(first_week)` to `r week_label(last_week)`.
+:::
 
-## Measures
+::: {.callout-note collapse="true"}
+# Data and definitions
+
+Measles outbreak data sourced from the DGHS measles monitoring dashboard (measles.dghs.gov.bd), except where otherwise noted.
+Population numbers are from the 2022 census projection.
+
+## Data reporting process
+
+Cases are reported as number of measles admissions to medical facilities, collated by district civil surgeon offices, with daily counts submitted to the DGHS dashboard.
+Lab testing data and day of week effects in reporting are in [Appendix 2](#sec-testing).
+
+```{r}
+#| label: fig-reporting-units
+#| fig-cap: >-
+#|   Reporting units submitting per day, by division, Bangladesh, 8 April 2026 to cutoff.
+#|   Divisions other than Dhaka: reports as a proportion of the most frequent daily count.
+#|   Dhaka: count of reports.
+#|   Source: DGHS measles monitoring platform.
+#| fig-alt: "Line charts of daily reporting completeness by division and the daily count of reports in Dhaka division."
+#| fig-height: 7
+
+n_districts <- lookup |> count(division = adm1_name, name = "districts")
+modal <- function(x) as.integer(names(which.max(table(x))))
+reports <- div_daily |>
+  filter(date >= first_daily) |>
+  select(date, division, report_count) |>
+  group_by(division) |>
+  mutate(expected = modal(report_count)) |>
+  ungroup() |>
+  left_join(n_districts, by = "division") |>
+  mutate(value = if_else(division == "Dhaka", report_count,
+                         report_count / expected))
+p <- ggplot(reports, aes(date, value)) +
+  geom_line(colour = col_primary) +
+  facet_wrap(~division, ncol = 4, scales = "free_y") +
+  scale_x_date(date_labels = "%b") +
+  labs(x = "Report date", y = "Reports / expected (Dhaka: count)")
+ggplotly(p)
+
+reports |>
+  distinct(division, districts, expected) |>
+  kable(caption = "Districts and most frequent daily count of reports, by division")
+```
+
+### Source data definitions
 
 ```{r}
 #| label: tbl-measures
-#| tbl-cap: "DGHS dashboard measures, 24-hour counts by report date, Bangladesh, 2026"
+#| tbl-cap: "DGHS dashboard indicators, reported as 24-hour counts by report date"
 
 tibble::tribble(
   ~measure, ~dashboard_label, ~notes,
-  "suspected", "suspected24h", "Hospital admissions with suspected measles (WHO call); inclusion of confirmed unknown (Q6)",
-  "confirmed", "confirmed24h", "Laboratory method not stated; about 1,000 PCR-confirmed in total (WHO call)",
-  "suspected_deaths", "suspectedDeath24h", "Inclusion of confirmed deaths unknown (Q6); place of death unknown (Q7)",
+  "suspected", "suspected24h", "Hospital admissions with suspected measles; inclusion of confirmed unknown",
+  "confirmed", "confirmed24h", "Laboratory method not stated",
+  "suspected_deaths", "suspectedDeath24h", "Inclusion of confirmed deaths, and place of death, unknown",
   "confirmed_deaths", "confirmedDeath24h", "As above",
   "admitted", "admitted24h", "Relation to suspected not published",
   "discharged", "discharged24h", "\"Recovered\" in the dashboard's Excel export",
@@ -202,6 +224,8 @@ tibble::tribble(
 ) |>
   kable()
 ```
+
+### WHO standard case definition
 
 ```{r}
 #| label: tbl-who-definitions
@@ -211,142 +235,384 @@ read.csv(here("assets", "case-definitions.csv")) |>
   select(classification, definition, page) |>
   kable()
 ```
+:::
 
-No official Bangladesh 2026 case definition was found in public documents.
-
-## Laboratory testing in the DGHS series
-
-Share sampled is serum samples sent over suspected cases.
-Confirmation yield is confirmed cases over serum samples sent, in the same week (lag 0) and the week before (lag 1 week).
-Yield is not test positivity: confirmations lag samples, and not every confirmation need come from a serum sample.
+# Situation update
 
 ```{r}
-#| label: fig-testing
-#| fig-cap: "Serum samples sent per suspected case, and confirmed cases per serum sample sent, by division and week, Bangladesh, May 2026 to cutoff. Source: DGHS measles monitoring platform, report date."
-#| fig-alt: "Line charts, one panel per division, of weekly testing ratios over time."
-#| fig-height: 7
+#| label: situation
 
-# Serum samples are recorded from May (R/data/01-fetch-dashboard.R), so the
-# ratios start with the first complete week in May.
-serum_start <- ymd("2026-05-01")
-testing <- div_daily |>
-  complete_weeks() |>
-  filter(week_end - 6 >= serum_start) |>
-  group_by(division, week_end) |>
-  summarise(across(c(suspected, confirmed, serum_sent), sum),
-            .groups = "drop") |>
-  arrange(division, week_end) |>
-  group_by(division) |>
-  mutate(
-    share_sampled = serum_sent / suspected,
-    yield_lag0 = if_else(serum_sent > 0, confirmed / serum_sent, NA),
-    yield_lag1 = if_else(lag(serum_sent) > 0,
-                         confirmed / lag(serum_sent), NA)
-  ) |>
-  ungroup()
-
-p <- testing |>
-  pivot_longer(c(share_sampled, yield_lag0, yield_lag1),
-               names_to = "ratio") |>
-  mutate(ratio = recode(ratio,
-                        share_sampled = "Serum sent / suspected",
-                        yield_lag0 = "Confirmed / serum sent, same week",
-                        yield_lag1 = "Confirmed / serum sent, week before")) |>
-  ggplot(aes(week_end, value, colour = ratio, linetype = ratio)) +
-  geom_line() +
-  facet_wrap(~division, ncol = 4, scales = "free_y") +
-  scale_colour_manual(values = c(
-    "Serum sent / suspected" = col_primary,
-    "Confirmed / serum sent, same week" = col_highlight,
-    "Confirmed / serum sent, week before" = col_highlight)) +
-  scale_linetype_manual(values = c(
-    "Serum sent / suspected" = "solid",
-    "Confirmed / serum sent, same week" = "solid",
-    "Confirmed / serum sent, week before" = "dashed")) +
-  scale_x_date(date_labels = "%b") +
-  labs(x = "Week ending", y = "Ratio", colour = NULL, linetype = NULL)
-ggplotly(p) |> layout(legend = list(orientation = "h", y = -0.15))
+cum <- nat_daily |>
+  summarise(across(c(suspected, confirmed, suspected_deaths,
+                     confirmed_deaths), sum))
+nat_weekly <- weekly(nat_daily) |>
+  mutate(per_100k = 1e5 * suspected / sum(pop1$pop))
+this_week <- nat_weekly |> filter(week == last_week)
+prev_week <- nat_weekly |> filter(week == last_week - 7)
+change_pct <- 100 * (this_week$suspected / prev_week$suspected - 1)
+div_last <- weekly(div_daily, division) |>
+  filter(week == last_week) |>
+  left_join(pop1, by = "division") |>
+  mutate(per_100k = 1e5 * suspected / pop) |>
+  arrange(desc(per_100k))
+dist_last <- weekly(dist_daily, district) |>
+  filter(week == last_week)
+partial <- nat_daily |> filter(date > last_week + 6)
+partial_text <- if (nrow(partial) == 0) {
+  "none; the latest week is complete"
+} else {
+  paste0(fmt(sum(partial$suspected)), " suspected cases in ", nrow(partial),
+         " days (", fmt_date(min(partial$date)), " to ",
+         fmt_date(cutoff), ")")
+}
 ```
 
-::: {.callout-tip collapse="true"}
-## Scaffold: testing
+- Cumulative, 15 March to `r fmt_date(cutoff)`: `r fmt(cum$suspected)` suspected and `r fmt(cum$confirmed)` confirmed cases; `r fmt(cum$suspected_deaths)` suspected and `r fmt(cum$confirmed_deaths)` confirmed deaths, as published.
+- Latest complete `r week_label(last_week)`: `r fmt(this_week$suspected)` suspected cases, `r sprintf("%+.0f%%", change_pct)` on the week before; `r sprintf("%.1f", this_week$per_100k)` per 100,000 population (@fig-epicurve-national).
+- Highest division incidence that week: `r div_last$division[1]`, `r sprintf("%.1f", div_last$per_100k[1])` per 100,000. Districts reporting any suspected case that week: `r sum(dist_last$suspected > 0)` of 64.
+- Current week to date: `r partial_text`.
 
-- Share sampled, national, from May: `r with(nat_daily |> filter(date >= serum_start), round(sum(serum_sent) / sum(suspected), 2))`.
-- Confirmed / serum sent, national, from May: `r with(nat_daily |> filter(date >= serum_start), round(sum(confirmed) / sum(serum_sent), 2))`.
-- Range of weekly share sampled across divisions: `r paste(round(range(testing$share_sampled, na.rm = TRUE), 2), collapse = " to ")`.
+<!-- TODO KS: one sentence on the current trend -->
+
+::: {.callout-caution}
+# Interpreting these data
+
+- Counts are hospital admissions with suspected measles, not infections; cases not admitted are not counted.
+- Report date stands in for onset date; the delay between them is not published ([Epidemic timespans](#sec-timespans)).
+- Districts are those of the reporting facility, so referral hospitals raise counts in their own districts.
+- DGHS does not publish whether suspected cases include confirmed cases, or whether suspected deaths include confirmed deaths (@tbl-measures).
+- Whether cases in the Rohingya camps are counted in Cox's Bazar district is not known ([Appendix 1](#sec-camps)).
+- Cases from 15 March to 7 April were reported as one total on 7 April, so daily and weekly series start on 8 April.
+- WHO monthly surveillance, a separate stream, changed classification in June and disagrees with the DGHS series after May ([Appendix 3](#sec-validation)).
+:::
+
+--------------------------------------------------------------------------------
+
+# Epidemic curve
+
+Outbreak surveillance data appears from 15 March.
+The DGHS report a single cumulative total from 15 March through 7 April (`r fmt(lump)` suspected cases), followed by daily incident data from 8 April to present.
+It is likely the outbreak started substantially earlier, perhaps as early as December 2025 among the Rohingya population in Cox's Bazar.
+
+::: {.callout-tip collapse="true"}
+# Latest daily data
+
+```{r}
+#| label: latest-daily
+
+tail(nat_daily) |> kable(caption = "Daily DGHS measles dashboard data")
+```
 :::
 
 ```{r}
-#| label: checks-testing
+#| label: fig-epicurve-national
+#| fig-cap: >-
+#|   Suspected (bars) and confirmed (line) measles cases per epidemiological week, Bangladesh, complete weeks from 12 April 2026 to the latest complete week.
+#|   Confirmed cases are overlaid, not stacked: whether suspected includes confirmed is not published.
+#|   Dotted lines: nationwide campaign (20 April); camp campaign and platform launch (26 April).
+#|   Cases from 15 March to 7 April, reported as one total, are not shown.
+#|   Source: DGHS measles monitoring platform, report date.
+#| fig-alt: "Weekly bar chart of national suspected measles cases with a line of confirmed cases and dotted lines at campaign dates."
 
-# Reported, not enforced: confirmations need not come from serum samples
-# recorded on the platform.
-cum_div <- div_daily |>
-  filter(date >= serum_start) |>
-  group_by(division) |>
-  summarise(across(c(suspected, confirmed, serum_sent), sum)) |>
-  mutate(confirmed_le_suspected = confirmed <= suspected,
-         serum_ge_confirmed = serum_sent >= confirmed)
-stopifnot(all(cum_div$confirmed_le_suspected))
-kable(cum_div, caption = "Cumulative counts from 1 May, by division")
+p <- nat_weekly |>
+  mutate(text = paste0(week_label(week), ": ", fmt(suspected),
+                       " suspected, ", fmt(confirmed), " confirmed")) |>
+  ggplot(aes(week + 3.5)) +
+  geom_col(aes(y = suspected, fill = "Suspected", text = text), width = 7) +
+  geom_line(aes(y = confirmed, colour = "Confirmed")) +
+  geom_point(aes(y = confirmed, colour = "Confirmed", text = text),
+             size = 1) +
+  geom_vline(data = filter(events_marked, date >= first_week),
+             aes(xintercept = date), colour = col_primary,
+             linetype = "dotted") +
+  scale_fill_manual(values = c(Suspected = col_reference)) +
+  scale_colour_manual(values = c(Confirmed = col_highlight)) +
+  scale_x_date(date_labels = "%b") +
+  labs(x = "Week (Sunday to Saturday)", y = "Cases per week",
+       fill = NULL, colour = NULL)
+ggplotly(p, tooltip = "text")
 ```
 
-## Case classification in WHO monthly surveillance
+<!-- TODO KS: one sentence stating the pattern -->
 
-WHO monthly data come from EPI case-based surveillance, a different stream from the DGHS hospital series.
-Share tested = (laboratory-confirmed + discarded) / suspected.
+## Epidemic timespans {#sec-timespans}
+
+```{r}
+#| label: tbl-timespans
+#| tbl-cap: "Relevant epidemiological time intervals and potential data sources"
+
+tibble::tribble(
+  ~interval, ~public_data, ~line_list_variable, ~other_source,
+  "Generation or serial interval", "No", "No (no transmission pairs)", "Literature",
+  "Exposure to onset (incubation)", "No", "No", "Literature",
+  "Fever to rash", "No", "Yes", "",
+  "Rash to notification", "No", "Yes", "",
+  "Notification to investigation", "No", "Yes", "",
+  "Rash to specimen; specimen to result", "No", "Yes", "",
+  "Onset to admission", "No", "Yes", "",
+  "Admission to report date", "No; indirect signs only (days with missing reports)", "No", "",
+  "Suspected to confirmed", "No (share tested varies)", "Yes", "",
+  "Admission to exit (discharge or death)", "Partly: deconvolution of discharges and deaths against admissions, if deaths are hospital deaths", "Yes", "",
+  "Onset to death", "No", "Free-text Comment only", "Unknown",
+  "Campaign dose to rash", "No", "DateLastMCV", "",
+  "Undetected period (first infection to detection)", "No", "Onset dates before April", "Molecular clock on sequences"
+) |>
+  kable(col.names = c("Interval", "Public data", "Line list variable",
+                      "Other source"))
+```
+
+--------------------------------------------------------------------------------
+
+# Spatial spread
+
+```{r}
+#| label: inputs-where
+
+district_cum <- dist_daily |>
+  group_by(district) |>
+  summarise(suspected = sum(suspected), .groups = "drop") |>
+  left_join(pop2, by = "district") |>
+  mutate(per_100k = 1e5 * suspected / pop)
+stopifnot(nrow(district_cum) == 64, !anyNA(district_cum$pop))
+
+map_districts <- adm2 |>
+  left_join(district_cum, by = c("adm2_name" = "district"))
+breaks_100k <- c(0, 25, 50, 100, 200, 400)
+stopifnot(!anyNA(map_districts$per_100k),
+          max(map_districts$per_100k) <= max(breaks_100k))
+```
+
+```{r}
+#| label: fig-map-cumulative
+#| fig-cap: >-
+#|   Cumulative suspected measles cases per 100,000 population, by district of reporting facility, Bangladesh, 15 March 2026 to cutoff.
+#|   Sources: DGHS measles monitoring platform; 2022 census projection.
+#| fig-alt: "Choropleth map of Bangladesh districts shaded by cumulative suspected measles cases per 100,000, with division outlines."
+#| fig-height: 8
+
+ggplot() +
+  geom_sf(data = map_districts, aes(fill = per_100k), colour = "white",
+          linewidth = 0.1) +
+  geom_sf(data = adm1, fill = NA, colour = col_primary, linewidth = 0.4) +
+  scale_fill_viridis_b(breaks = breaks_100k, limits = range(breaks_100k),
+                       option = "magma", direction = -1,
+                       show.limits = TRUE) +
+  labs(fill = "Suspected cases\nper 100,000") +
+  theme_void() +
+  theme(legend.position = "right")
+```
+
+<!-- TODO KS: one sentence stating the pattern -->
+
+```{r}
+#| label: fig-ridge-district
+#| fig-cap: >-
+#|   Weekly suspected measles cases as a share of each district's peak week, by district of reporting facility and division, Bangladesh, complete weeks from 12 April 2026 to the latest complete week.
+#|   Districts ordered within each division by week of peak, earliest at top.
+#|   Heights show timing, not size: each district is scaled to its own peak.
+#|   A peak in the first or last week may lie outside the series.
+#|   Source: DGHS measles monitoring platform, report date.
+#| fig-alt: "Ridgeline plots of weekly suspected cases scaled to each district's peak, one panel per division, districts ordered by peak week."
+#| fig-height: 14
+
+dist_weekly <- weekly(dist_daily, division, district) |>
+  group_by(district) |>
+  mutate(peak_week = week[which.max(suspected)]) |>
+  ungroup()
+# Latest peak first, so the earliest peak is the top row
+ridge_order <- dist_weekly |>
+  distinct(district, peak_week) |>
+  arrange(desc(peak_week), desc(as.integer(district))) |>
+  pull(district) |>
+  as.character()
+
+dist_weekly |>
+  group_by(district) |>
+  mutate(share_of_peak = suspected / max(suspected)) |>
+  ungroup() |>
+  ggplot(aes(week + 3.5, factor(district, levels = ridge_order),
+             height = share_of_peak)) +
+  geom_ridgeline(scale = 0.9, fill = col_reference, alpha = 0.5,
+                 colour = col_primary, linewidth = 0.3) +
+  facet_grid(division ~ ., scales = "free_y", space = "free_y") +
+  scale_x_date(date_labels = "%b", expand = c(0, 0)) +
+  # Room above the top ridge in each panel
+  scale_y_discrete(expand = expansion(add = c(0.2, 1))) +
+  labs(x = "Week (Sunday to Saturday)", y = NULL) +
+  theme(axis.text.y = element_text(size = 7),
+        panel.grid.major.y = element_blank(),
+        strip.text.y = element_text(angle = 0))
+```
+
+<!-- TODO KS: one sentence stating the pattern -->
+
+# Vaccination
+
+```{r}
+#| label: tbl-campaigns
+#| tbl-cap: "Measles-rubella vaccination campaign rounds, Bangladesh, 2026"
+
+events |>
+  filter(grepl("campaign", event, ignore.case = TRUE)) |>
+  transmute(date = fmt_date(date, year = TRUE), event, scope, source) |>
+  kable(col.names = c("Date", "Event", "Scope", "Source"))
+```
+
+Not yet in the data: dates of the May round and the September mop-up, and coverage by division (`sitrep/data/dghs-campaign.csv`, not built).
+
+--------------------------------------------------------------------------------
+
+# Appendix 1: subpopulation outbreaks {#sec-camps}
+
+## Rohingya population
+
+TBC pending clarification and data extraction from humanitarian reporting
+
+```{r}
+#| label: inputs-among-whom
+
+# TODO properly review reports from rohingya population to identify outbreak events in a consistent dataframe
+```
+
+--------------------------------------------------------------------------------
+
+# Appendix 2: Test positivity and data reporting pipeline {#sec-testing}
+
+## Lab testing
+
+Serum samples are recorded on the platform from May.
+Serum sent per suspected case and confirmed per suspected case are ratios of totals since 1 May.
+Neither is test positivity: the platform does not report negative results, and a confirmation need not come from a sample recorded on the platform.
+
+```{r}
+#| label: tbl-testing
+#| tbl-cap: >-
+#|   Suspected cases, serum samples sent and confirmed cases, by division, Bangladesh, 1 May 2026 to cutoff.
+#|   Source: DGHS measles monitoring platform, report date.
+
+serum_start <- ymd("2026-05-01")
+sum_testing <- function(d) {
+  d |>
+    filter(date >= serum_start) |>
+    summarise(across(c(suspected, serum_sent, confirmed), sum))
+}
+bind_rows(
+  div_daily |>
+    group_by(place = as.character(division)) |>
+    sum_testing(),
+  nat_daily |>
+    sum_testing() |>
+    mutate(place = "National")
+) |>
+  mutate(serum_per_suspected = serum_sent / suspected,
+         confirmed_per_suspected = confirmed / suspected) |>
+  kable(digits = 2, format.args = list(big.mark = ","),
+        col.names = c("Place", "Suspected", "Serum sent", "Confirmed",
+                      "Serum sent per suspected",
+                      "Confirmed per suspected"))
+```
+
+WHO monthly surveillance records discarded cases, so it gives the only laboratory positivity in public data.
+Share tested = (laboratory-confirmed + discarded) / suspected; an upper bound, since cases can be discarded without a test (@tbl-who-definitions).
 Laboratory positivity = laboratory-confirmed / (laboratory-confirmed + discarded).
 
 ```{r}
-#| label: fig-who-classification
-#| fig-cap: "Measles cases by final classification, and share of suspected cases tested and laboratory positivity, by month, Bangladesh, January 2023 to latest. Source: WHO provisional monthly measles and rubella data (table 404)."
-#| fig-alt: "Stacked bar chart of monthly cases by classification above a line chart of share tested and positivity."
-#| fig-height: 8
+#| label: tbl-who-positivity
+#| tbl-cap: >-
+#|   Measles cases by final classification, share tested and laboratory positivity, by month, Bangladesh, 2026.
+#|   Source: WHO provisional monthly measles and rubella data.
 
-who <- read.csv(here("data", "who-monthly.csv")) |>
-  mutate(month = make_date(year, month, 1)) |>
-  filter(month >= ymd("2023-01-01"))
-stopifnot(all(who$measles_suspect == who$measles_total + who$discarded))
-
-who_long <- who |>
-  select(month, `Laboratory-confirmed` = measles_lab_confirmed,
-         `Epidemiologically linked` = measles_epi_linked,
-         `Clinically compatible` = measles_clinical,
-         Discarded = discarded) |>
-  pivot_longer(-month, names_to = "classification", values_to = "cases") |>
-  mutate(classification = factor(classification, levels = c(
-    "Discarded", "Clinically compatible", "Epidemiologically linked",
-    "Laboratory-confirmed")))
-
-p_counts <- ggplot(who_long, aes(month, cases, fill = classification)) +
-  geom_col(width = 25) +
-  scale_fill_manual(values = c("#d4d4d4", col_reference, col_highlight,
-                               col_primary)) +
-  scale_x_date(date_labels = "%b %Y") +
-  labs(x = NULL, y = "Suspected cases", fill = NULL)
-
-who_ratios <- who |>
-  mutate(
-    tested = measles_lab_confirmed + discarded,
-    `Share tested` = tested / measles_suspect,
-    `Laboratory positivity` = if_else(tested > 0,
-                                      measles_lab_confirmed / tested, NA)
+who |>
+  filter(year == 2026) |>
+  transmute(
+    month = format(month, "%B"),
+    suspected = measles_suspect,
+    lab_confirmed = measles_lab_confirmed,
+    epi_linked = measles_epi_linked,
+    clinical = measles_clinical,
+    discarded,
+    share_tested = (measles_lab_confirmed + discarded) / measles_suspect,
+    positivity = measles_lab_confirmed / (measles_lab_confirmed + discarded)
   ) |>
-  select(month, `Share tested`, `Laboratory positivity`) |>
-  pivot_longer(-month, names_to = "ratio")
-p_ratios <- ggplot(who_ratios, aes(month, value, colour = ratio)) +
-  geom_line() +
-  geom_point(size = 1) +
-  scale_colour_manual(values = c(col_highlight, col_primary)) +
-  scale_x_date(date_labels = "%b %Y") +
-  labs(x = NULL, y = "Proportion", colour = NULL)
-
-subplot(ggplotly(p_counts), ggplotly(p_ratios), nrows = 2, shareX = TRUE,
-        titleY = TRUE, heights = c(0.6, 0.4))
+  kable(digits = 2, format.args = list(big.mark = ","),
+        col.names = c("Month", "Suspected", "Lab-confirmed", "Epi-linked",
+                      "Clinically compatible", "Discarded", "Share tested",
+                      "Lab positivity"))
 ```
 
-In every month, suspected = total + discarded.
-Discarded cases include those discarded without a laboratory test (WHO definition, `tbl-who-definitions`), so share tested is an upper bound.
+## Day of week reporting
+
+```{r}
+#| label: tbl-weekday
+#| tbl-cap: >-
+#|   Daily suspected cases relative to the centred 7-day mean, by weekday and division: median (interquartile range), Bangladesh, 8 April 2026 to cutoff.
+#|   Source: DGHS measles monitoring platform, report date.
+
+weekday <- div_daily |>
+  filter(date >= first_daily) |>
+  arrange(division, date) |>
+  group_by(division) |>
+  mutate(centred = slide_dbl(suspected, mean, .before = 3, .after = 3,
+                             .complete = TRUE),
+         rel = suspected / centred) |>
+  ungroup() |>
+  filter(!is.na(rel)) |>
+  mutate(weekday = wday(date, label = TRUE, week_start = 6)) |>
+  group_by(division, weekday) |>
+  summarise(cell = sprintf("%.2f (%.2f to %.2f)", median(rel),
+                           quantile(rel, 0.25), quantile(rel, 0.75)),
+            .groups = "drop") |>
+  pivot_wider(names_from = weekday, values_from = cell)
+kable(weekday)
+```
+
+# Appendix 3: data validation {#sec-validation}
+
+## Comparison with WHO
+
+WHO still produce monthly measles and rubella surveillance data, but with an apparent change in case ascertainment from June.
+
+```{r}
+#| label: fig-timeline
+#| fig-cap: >-
+#|   Measles cases per month: WHO surveillance suspected and total cases (bars), and DGHS hospital suspected cases (points), Bangladesh, January 2026 to cutoff.
+#|   DGHS April is 8 to 30 April; 15 March to 7 April is reported as one total; the current month is shown when complete.
+#|   Sources: WHO provisional monthly measles and rubella data; DGHS measles monitoring platform.
+#| fig-alt: "Monthly bar chart of WHO suspected and total measles cases with DGHS monthly suspected hospital cases as points."
+
+who_2026 <- who |>
+  filter(year(month) == 2026) |>
+  select(month, `WHO suspected` = measles_suspect,
+         `WHO total (lab + epi-linked + clinical)` = measles_total) |>
+  pivot_longer(-month, names_to = "series", values_to = "cases")
+dghs_monthly <- nat_daily |>
+  filter(date >= first_daily) |>
+  group_by(month = floor_date(date, "month")) |>
+  summarise(cases = sum(suspected), days = n(), .groups = "drop") |>
+  # Current month dropped while incomplete; April starts on 8 April
+  filter(month < floor_date(cutoff + 1, "month")) |>
+  mutate(series = "DGHS suspected (hospital)")
+
+p <- ggplot() +
+  geom_col(data = who_2026,
+           aes(month, cases, fill = series),
+           position = position_dodge(width = 25), width = 24) +
+  geom_point(data = dghs_monthly,
+             aes(month, cases, colour = series, text = paste(days, "days")),
+             size = 2.5) +
+  geom_vline(xintercept = ymd("2026-06-01"), linetype = "dotted",
+             colour = col_reference) +
+  annotate("text", x = ymd("2026-06-01"), y = max(dghs_monthly$cases),
+           label = "WHO classification change", hjust = -0.05,
+           size = 3, colour = col_reference) +
+  scale_fill_manual(values = c(
+    `WHO suspected` = "#d4d4d4",
+    `WHO total (lab + epi-linked + clinical)` = col_reference)) +
+  scale_colour_manual(values = c(`DGHS suspected (hospital)` = col_highlight)) +
+  scale_x_date(date_labels = "%b") +
+  labs(x = NULL, y = "Cases per month", fill = NULL, colour = NULL)
+ggplotly(p, tooltip = c("x", "y", "text"))
+```
 
 ## Data quality
 
@@ -378,855 +644,3 @@ read.csv(here("sitrep", "data", "dghs-source-compare.csv")) |>
             net_difference = sum(diff)) |>
   kable()
 ```
-
-## Reporting units
-
-Reporting units that submitted each day, by division.
-Outside Dhaka division, units are district civil surgeon offices plus, in some divisions, one other unit.
-The number of registered units is not published (`who-questions.md` Q21), so the expected number is taken as the most frequent daily count in each division, and completeness is reports over that number.
-Dhaka division varies too widely for this and is shown as a count.
-
-```{r}
-#| label: fig-reporting-units
-#| fig-cap: "Reporting units submitting per day, by division, Bangladesh, 8 April 2026 to cutoff. Divisions other than Dhaka: reports as a proportion of the most frequent daily count. Dhaka: count of reports. Source: DGHS measles monitoring platform."
-#| fig-alt: "Line charts of daily reporting completeness by division and the daily count of reports in Dhaka division."
-#| fig-height: 7
-
-n_districts <- lookup |> count(division = adm1_name, name = "districts")
-modal <- function(x) as.integer(names(which.max(table(x))))
-reports <- div_daily |>
-  filter(date >= first_daily) |>
-  select(date, division, report_count) |>
-  group_by(division) |>
-  mutate(expected = modal(report_count)) |>
-  ungroup() |>
-  left_join(n_districts, by = "division") |>
-  mutate(value = if_else(division == "Dhaka", report_count,
-                         report_count / expected))
-p <- ggplot(reports, aes(date, value)) +
-  geom_line(colour = col_primary) +
-  facet_wrap(~division, ncol = 4, scales = "free_y") +
-  scale_x_date(date_labels = "%b") +
-  labs(x = "Report date", y = "Reports / expected (Dhaka: count)")
-ggplotly(p)
-
-reports |>
-  distinct(division, districts, expected) |>
-  kable(caption = "Districts and most frequent daily count of reports, by division")
-```
-
-# How much
-
-```{r}
-#| label: tbl-cumulative
-#| tbl-cap: "Cumulative counts and suspected cases per 100,000 population, by division, Bangladesh, 15 March 2026 to cutoff. Source: DGHS measles monitoring platform; population: 2022 census projection."
-
-u5_national <- sum(pop1$pop_u5) / sum(pop1$pop)
-
-cumulate <- function(d) {
-  d |>
-    summarise(across(c(suspected, confirmed, suspected_deaths,
-                       confirmed_deaths, admitted, discharged), sum))
-}
-coxs_pcode <- lookup$adm2_pcode[lookup$adm2_name == "Cox's Bazar"]
-coxs_pop <- pop2$pop[pop2$adm2_pcode == coxs_pcode]
-chattogram_pop <- pop1$pop[pop1$division == "Chattogram"]
-
-cum_table <- bind_rows(
-  div_daily |>
-    group_by(place = as.character(division)) |>
-    cumulate() |>
-    left_join(pop1, by = c("place" = "division")),
-  nat_daily |>
-    cumulate() |>
-    mutate(place = "National", pop = sum(pop1$pop),
-           pop_u5 = sum(pop1$pop_u5)),
-  dist_daily |>
-    filter(district == "Cox's Bazar") |>
-    cumulate() |>
-    mutate(place = "Cox's Bazar district", pop = coxs_pop,
-           pop_u5 = pop2$pop_u5[pop2$adm2_pcode == coxs_pcode]),
-  dist_daily |>
-    filter(division == "Chattogram", district != "Cox's Bazar") |>
-    cumulate() |>
-    mutate(place = "Chattogram excluding Cox's Bazar",
-           pop = chattogram_pop - coxs_pop,
-           pop_u5 = pop1$pop_u5[pop1$division == "Chattogram"] -
-             pop2$pop_u5[pop2$adm2_pcode == coxs_pcode])
-) |>
-  mutate(
-    place = factor(place, levels = c(division_order, "National",
-                                     "Cox's Bazar district",
-                                     "Chattogram excluding Cox's Bazar")),
-    suspected_per_100k = 1e5 * suspected / pop,
-    u5_share_pct = 100 * pop_u5 / pop,
-    u5_share_band = case_when(
-      is.na(u5_share_pct) | place == "National" ~ NA,
-      u5_share_pct > 100 * u5_national ~ "above national",
-      TRUE ~ "below national"
-    )
-  ) |>
-  arrange(place)
-
-cum_table |>
-  select(place, suspected, confirmed, suspected_deaths, confirmed_deaths,
-         suspected_per_100k, u5_share_pct, u5_share_band) |>
-  kable(digits = 1, format.args = list(big.mark = ","))
-```
-
-Under-five share of population: national `r round(100 * u5_national, 1)`%.
-No under-five rates: public data have no cases by age and division.
-Whether the census counts camp residents is unknown (Q12).
-
-```{r}
-#| label: fig-incidence
-#| fig-cap: "Suspected cases per 100,000 population in the previous 7 days, by division (black) with national (grey), Bangladesh, 14 April 2026 to cutoff. Log scale. Source: DGHS measles monitoring platform; population: 2022 census projection."
-#| fig-alt: "Line charts, one panel per division, of 7-day incidence per 100,000 on a log scale, each with the national series in grey."
-#| fig-height: 6
-
-incidence <- div_daily |>
-  filter(date >= first_daily) |>
-  arrange(division, date) |>
-  group_by(division) |>
-  mutate(cases_7d = trail7(suspected)) |>
-  ungroup() |>
-  left_join(pop1, by = "division") |>
-  mutate(incidence_7d = 1e5 * cases_7d / pop) |>
-  filter(!is.na(incidence_7d))
-incidence_nat <- nat_daily |>
-  filter(date >= first_daily) |>
-  arrange(date) |>
-  mutate(incidence_7d = 1e5 * trail7(suspected) / sum(pop1$pop)) |>
-  filter(!is.na(incidence_7d))
-
-p <- ggplot(incidence, aes(date, incidence_7d)) +
-  geom_line(data = select(incidence_nat, date, incidence_7d),
-            colour = col_reference) +
-  geom_line(colour = col_primary) +
-  facet_wrap(~division, ncol = 4) +
-  scale_y_log10() +
-  scale_x_date(date_labels = "%b") +
-  labs(x = "Report date", y = "Suspected cases per 100,000, previous 7 days")
-ggplotly(p)
-```
-
-```{r}
-#| label: checks-how-much
-
-stopifnot(
-  nrow(pop1) == 8, nrow(pop2) == 64,
-  isTRUE(all.equal(sum(cum_table$suspected[cum_table$place %in% division_order]),
-                   cum_table$suspected[cum_table$place == "National"]))
-)
-```
-
-# When
-
-## National timeline
-
-```{r}
-#| label: fig-timeline
-#| fig-cap: "Measles cases per month: WHO surveillance suspected and total cases (bars), and DGHS hospital suspected cases (points), Bangladesh, January 2026 to cutoff. DGHS April is 8 to 30 April; 15 March to 7 April is reported as one total; the current month is shown when complete. Sources: WHO provisional monthly measles and rubella data; DGHS measles monitoring platform."
-#| fig-alt: "Monthly bar chart of WHO suspected and total measles cases with DGHS monthly suspected hospital cases as points."
-
-who_2026 <- who |>
-  filter(year(month) == 2026) |>
-  select(month, `WHO suspected` = measles_suspect,
-         `WHO total (lab + epi-linked + clinical)` = measles_total) |>
-  pivot_longer(-month, names_to = "series", values_to = "cases")
-dghs_monthly <- nat_daily |>
-  filter(date >= first_daily) |>
-  group_by(month = floor_date(date, "month")) |>
-  summarise(cases = sum(suspected), days = n(), .groups = "drop") |>
-  # Current month dropped while incomplete; April starts on 8 April
-  filter(month < floor_date(cutoff + 1, "month")) |>
-  mutate(series = "DGHS suspected (hospital)")
-lump <- nat_daily |> filter(date == ymd("2026-04-07")) |> pull(suspected)
-
-p <- ggplot() +
-  geom_col(data = who_2026,
-           aes(month, cases, fill = series),
-           position = position_dodge(width = 25), width = 24) +
-  geom_point(data = dghs_monthly, aes(month, cases, text = paste(days, "days")),
-             colour = col_highlight, size = 2.5) +
-  geom_vline(xintercept = ymd("2026-06-01"), linetype = "dotted",
-             colour = col_reference) +
-  annotate("text", x = ymd("2026-06-01"), y = max(dghs_monthly$cases),
-           label = "WHO: classification change (June)", hjust = -0.05,
-           size = 3, colour = col_reference) +
-  scale_fill_manual(values = c(col_reference, "#d4d4d4")) +
-  scale_x_date(date_labels = "%b") +
-  labs(x = NULL, y = "Cases per month", fill = NULL)
-ggplotly(p, tooltip = c("x", "y", "text"))
-```
-
-DGHS cases from 15 March to 7 April, reported as one total on 7 April: `r format(lump, big.mark = ",")`.
-
-## Daily cases by division
-
-```{r}
-#| label: fig-epicurve-division
-#| fig-cap: "Daily suspected cases (points; Saturdays red) and 7-day trailing mean (line), by division, Bangladesh, 8 April 2026 to cutoff. Log scale; days with zero cases not shown. Vertical lines: events in assets/events.csv. Crosses at the foot of a panel: days with fewer reports than the division's most frequent daily count (not shown for Dhaka). Source: DGHS measles monitoring platform, report date."
-#| fig-alt: "Daily epidemic curves on a log scale, one panel per division, with 7-day means, campaign start lines and markers for days with missing district reports."
-#| fig-height: 7
-
-epicurve <- div_daily |>
-  filter(date >= first_daily) |>
-  arrange(division, date) |>
-  group_by(division) |>
-  mutate(mean_7d = trail7(suspected) / 7) |>
-  ungroup() |>
-  left_join(distinct(reports, division, expected), by = "division") |>
-  mutate(saturday = wday(date, week_start = 1) == 6,
-         missing_report = division != "Dhaka" & report_count < expected)
-n_zero <- sum(epicurve$suspected == 0)
-
-p <- ggplot(epicurve, aes(date)) +
-  geom_vline(data = events_marked, aes(xintercept = date),
-             colour = col_reference, linetype = "dotted") +
-  geom_point(data = filter(epicurve, suspected > 0),
-             aes(y = suspected, colour = saturday), size = 0.7) +
-  geom_line(aes(y = mean_7d), colour = col_primary) +
-  geom_point(data = filter(epicurve, missing_report), aes(y = 1),
-             shape = 4, colour = col_highlight) +
-  facet_wrap(~division, ncol = 4) +
-  scale_colour_manual(values = c(`FALSE` = col_reference,
-                                 `TRUE` = col_highlight), guide = "none") +
-  scale_y_log10() +
-  scale_x_date(date_labels = "%b") +
-  labs(x = "Report date", y = "Suspected cases per day")
-ggplotly(p)
-```
-
-Division-days with zero suspected cases (not shown): `r n_zero`.
-Division-days with fewer reports than expected: `r sum(epicurve$missing_report)`.
-
-## Timing by division
-
-```{r}
-#| label: tbl-timing
-#| tbl-cap: "Peak and recent change in daily suspected cases (7-day trailing mean), by division, Bangladesh, 8 April 2026 to cutoff. Source: DGHS measles monitoring platform, report date."
-
-weekly_div <- div_daily |>
-  complete_weeks() |>
-  group_by(division, week_end) |>
-  summarise(suspected = sum(suspected), .groups = "drop") |>
-  arrange(division, week_end) |>
-  group_by(division) |>
-  mutate(ratio = suspected / lag(suspected)) |>
-  slice_tail(n = 4) |>
-  mutate(k = paste0("ratio_wk", row_number())) |>
-  ungroup()
-
-timing <- epicurve |>
-  filter(!is.na(mean_7d)) |>
-  group_by(division) |>
-  summarise(
-    peak_date = date[which.max(mean_7d)],
-    peak_mean = max(mean_7d),
-    current_mean = last(mean_7d),
-    current_pct_of_peak = 100 * current_mean / peak_mean,
-    peak_censored = peak_date %in% range(date)
-  ) |>
-  left_join(
-    weekly_div |>
-      select(division, k, ratio) |>
-      pivot_wider(names_from = k, values_from = ratio),
-    by = "division"
-  ) |>
-  mutate(
-    # Doubling (positive) or halving (negative) time in days, last week
-    doubling_days = 7 * log(2) / log(ratio_wk4)
-  )
-kable(timing, digits = 2)
-```
-
-Week-on-week ratios are for the four 7-day blocks ending `r format(cutoff, "%d %B")` (`ratio_wk4` is the latest).
-Negative doubling times are halving times.
-
-## Day of week
-
-```{r}
-#| label: tbl-weekday
-#| tbl-cap: "Daily suspected cases relative to the centred 7-day mean, by weekday and division: median (interquartile range), Bangladesh, 8 April 2026 to cutoff. Source: DGHS measles monitoring platform, report date."
-
-weekday <- div_daily |>
-  filter(date >= first_daily) |>
-  arrange(division, date) |>
-  group_by(division) |>
-  mutate(centred = slide_dbl(suspected, mean, .before = 3, .after = 3,
-                             .complete = TRUE),
-         rel = suspected / centred) |>
-  ungroup() |>
-  filter(!is.na(rel)) |>
-  mutate(weekday = wday(date, label = TRUE, week_start = 6)) |>
-  group_by(division, weekday) |>
-  summarise(cell = sprintf("%.2f (%.2f to %.2f)", median(rel),
-                           quantile(rel, 0.25), quantile(rel, 0.75)),
-            .groups = "drop") |>
-  pivot_wider(names_from = weekday, values_from = cell)
-kable(weekday)
-```
-
-Weeks start on Saturday, the first day of the Bangladesh working week.
-
-## Intervals that can be estimated
-
-```{r}
-#| label: tbl-timespans
-#| tbl-cap: "Intervals in the 2026 Bangladesh measles outbreak and the data that can estimate each"
-
-tibble::tribble(
-  ~interval, ~public_data, ~who_line_list, ~other_source,
-  "Exposure to onset (incubation)", "No", "No", "Literature (parameter register)",
-  "Generation or serial interval", "No", "No (no transmission pairs)", "Literature",
-  "Fever to rash", "No", "Yes (DOnsetF, DOnsetR)", "",
-  "Rash to notification", "No", "Yes (DOnsetR, DNOT)", "",
-  "Notification to investigation", "No", "Yes (DNOT, DOI)", "",
-  "Rash to specimen; specimen to result", "No", "Yes (lab dates, about half of records)", "",
-  "Onset to admission", "No", "Only if admission date is digitised (Q2)", "",
-  "Admission to report date", "No; indirect signs only (days with missing reports)", "No", "WHO or DGHS (Q22)",
-  "Suspected to confirmed", "No (share tested varies)", "Yes", "",
-  "Admission to exit (discharge or death)", "Partly: deconvolution of discharges and deaths against admissions, if deaths are hospital deaths (Q7)", "Only if outcome fields are digitised (Q2)", "",
-  "Onset to death", "No", "Free-text Comment only", "Death line list (Q2)",
-  "Campaign dose to rash", "No", "DateLastMCV, 0.5% complete", "",
-  "Undetected period (first infection to detection)", "No", "Onset dates before April, if shared", "Molecular clock on sequences (IEDCR)"
-) |>
-  kable(col.names = c("Interval", "Public data", "WHO line list",
-                      "Other source"))
-```
-
-# Where
-
-```{r}
-#| label: inputs-where
-
-district_cum <- dist_daily |>
-  group_by(district) |>
-  summarise(suspected = sum(suspected), .groups = "drop") |>
-  left_join(pop2, by = "district") |>
-  mutate(per_100k = 1e5 * suspected / pop)
-stopifnot(nrow(district_cum) == 64, !anyNA(district_cum$pop))
-
-map_districts <- adm2 |>
-  left_join(district_cum, by = c("adm2_name" = "district"))
-stopifnot(!anyNA(map_districts$per_100k))
-
-medical_colleges <- read.csv(here("data", "covariates", "hospitals.csv")) |>
-  filter(medical_college) |>
-  st_as_sf(coords = c("lon", "lat"), crs = 4326)
-breaks_100k <- c(0, 25, 50, 100, 200, 400)
-stopifnot(max(map_districts$per_100k) <= max(breaks_100k))
-```
-
-```{r}
-#| label: fig-map-cumulative
-#| fig-cap: "Cumulative suspected cases per 100,000 population, by district of reporting facility, Bangladesh, 15 March 2026 to cutoff. Points: hospitals named \"medical college\" in OpenStreetMap (unchecked list; referral hospitals). Sources: DGHS measles monitoring platform; 2022 census projection; Healthsites.io, © OpenStreetMap contributors."
-#| fig-alt: "Choropleth map of Bangladesh districts shaded by cumulative suspected measles cases per 100,000, with division outlines and points for medical college hospitals."
-#| fig-height: 8
-
-ggplot() +
-  geom_sf(data = map_districts, aes(fill = per_100k), colour = "white",
-          linewidth = 0.1) +
-  geom_sf(data = adm1, fill = NA, colour = col_primary, linewidth = 0.4) +
-  geom_sf(data = medical_colleges, shape = 21, size = 1, fill = "white",
-          colour = col_primary) +
-  scale_fill_viridis_b(breaks = breaks_100k, limits = range(breaks_100k),
-                       option = "magma", direction = -1,
-                       show.limits = TRUE) +
-  labs(fill = "Suspected cases\nper 100,000") +
-  theme_void() +
-  theme(legend.position = "right")
-```
-
-```{r}
-#| label: fig-district-heatmap
-#| fig-cap: "Suspected cases per 100,000 population per week, by district of reporting facility, Bangladesh, weeks ending 14 April 2026 to cutoff. Districts grouped by division, west to east. Source: DGHS measles monitoring platform; 2022 census projection."
-#| fig-alt: "Heat map with one row per district and one column per week, shaded by weekly suspected cases per 100,000."
-#| fig-height: 13
-
-heat <- dist_daily |>
-  complete_weeks() |>
-  group_by(division, district, week_end) |>
-  summarise(suspected = sum(suspected), .groups = "drop") |>
-  left_join(select(pop2, district, pop), by = "district") |>
-  mutate(per_100k = 1e5 * suspected / pop,
-         row = factor(paste0(district, " (", division, ")"),
-                      levels = rev(paste0(district_order, " (",
-                                          pop2$division[match(district_order,
-                                                              pop2$district)],
-                                          ")"))))
-p <- ggplot(heat, aes(week_end, row, fill = per_100k,
-                      text = paste0(district, ", week ending ", week_end,
-                                    ": ", round(per_100k, 1), " per 100,000 (",
-                                    suspected, " cases)"))) +
-  geom_tile() +
-  scale_fill_viridis_b(breaks = c(0, 2, 5, 10, 20, 40), option = "magma",
-                       direction = -1) +
-  scale_x_date(date_labels = "%b", expand = c(0, 0)) +
-  labs(x = "Week ending", y = NULL, fill = "Per 100,000\nper week") +
-  theme(panel.grid = element_blank())
-ggplotly(p, tooltip = "text", height = 1100)
-```
-
-```{r}
-#| label: fig-map-peak
-#| fig-cap: "Month of the highest 7-day mean of suspected cases, by district of reporting facility, Bangladesh, 8 April 2026 to cutoff. Red outline: peak in the first or last week of the series. Source: DGHS measles monitoring platform."
-#| fig-alt: "Choropleth map of districts coloured by the month in which suspected cases peaked."
-#| fig-height: 8
-
-peaks <- dist_daily |>
-  filter(date >= first_daily) |>
-  arrange(district, date) |>
-  group_by(district) |>
-  mutate(mean_7d = trail7(suspected) / 7) |>
-  filter(!is.na(mean_7d)) |>
-  summarise(peak_date = date[which.max(mean_7d)],
-            first = min(date), last = max(date), .groups = "drop") |>
-  mutate(peak_month = factor(format(peak_date, "%B"),
-                             levels = month.name[4:10]),
-         censored = peak_date - first < 7 | last - peak_date < 7)
-
-map_peaks <- adm2 |> left_join(peaks, by = c("adm2_name" = "district"))
-ggplot() +
-  geom_sf(data = map_peaks, aes(fill = peak_month), colour = "white",
-          linewidth = 0.1) +
-  geom_sf(data = filter(map_peaks, censored), fill = NA,
-          colour = col_highlight, linewidth = 0.5) +
-  geom_sf(data = adm1, fill = NA, colour = col_primary, linewidth = 0.4) +
-  scale_fill_viridis_d(option = "viridis", drop = TRUE) +
-  labs(fill = "Peak month") +
-  theme_void() +
-  theme(legend.position = "right")
-```
-
-Districts whose peak falls in the first or last week (red outline): `r paste(sort(peaks$district[peaks$censored]), collapse = ", ")`.
-
-```{r}
-#| label: fig-map-hospitals
-#| fig-cap: "Hospitals per 100,000 population in OpenStreetMap, by district, Bangladesh, 2026. Context only: mapping completeness varies by district. Sources: Healthsites.io, © OpenStreetMap contributors; 2022 census projection."
-#| fig-alt: "Choropleth map of OpenStreetMap hospitals per 100,000 population by district."
-#| fig-height: 8
-
-hospitals_district <- read.csv(here("data", "covariates", "hospitals.csv")) |>
-  count(adm2_pcode, name = "hospitals")
-map_hospitals <- adm2 |>
-  left_join(hospitals_district, by = "adm2_pcode") |>
-  left_join(select(pop2, adm2_pcode, pop), by = "adm2_pcode") |>
-  mutate(hospitals = coalesce(hospitals, 0L),
-         per_100k = 1e5 * hospitals / pop)
-ggplot() +
-  geom_sf(data = map_hospitals, aes(fill = per_100k), colour = "white",
-          linewidth = 0.1) +
-  geom_sf(data = adm1, fill = NA, colour = col_primary, linewidth = 0.4) +
-  scale_fill_viridis_b(option = "mako", direction = -1, n.breaks = 6) +
-  labs(fill = "Hospitals\nper 100,000") +
-  theme_void() +
-  theme(legend.position = "right")
-```
-
-Campaign coverage by division and city corporation (`fig-campaign-coverage`) waits on `sitrep/data/dghs-campaign.csv`.
-
-# Among whom, including camps
-
-```{r}
-#| label: inputs-among-whom
-
-read_confirmed <- function(path) {
-  d <- read.csv(path, colClasses = "character", na.strings = c("", "NA"))
-  d |>
-    filter(!is.na(confirmed_by)) |>
-    mutate(value = as.numeric(value),
-           published_date = ymd(published_date, quiet = TRUE))
-}
-context_figures <- read_confirmed(here("data", "context-figures.csv"))
-camp_pop_all <- read.csv(here("data", "covariates", "camp_population.csv")) |>
-  filter(year == max(year), population_type == "REF",
-         grepl("Camp|RC|Bhasan Char", location))
-camps_measles <- read_confirmed(here("data", "camps-measles.csv"))
-c(context = nrow(context_figures), camps = nrow(camps_measles))
-```
-
-Only rows a person has confirmed against the source (`confirmed_by` in `data/context-figures.csv` and `data/camps-measles.csv`) are shown.
-Case base and period are from the reviewer's note (`review_note`).
-Rows marked `manual` were entered by the reviewer where the PDF text layer is garbled.
-
-```{r}
-#| label: tbl-reported-figures
-#| tbl-cap: "Reported measles case figures by age and vaccination status, from WHO, UN and UNICEF documents, Bangladesh, 2026"
-
-context_figures |>
-  arrange(indicator, published_date) |>
-  transmute(indicator, value, unit, case_base = review_note,
-            document = doc_id, published = published_date, page,
-            entry = quote_type) |>
-  kable()
-```
-
-```{r}
-#| label: fig-age-shares
-#| fig-cap: "Share of measles cases by age group, as reported in WHO, UN and UNICEF documents, Bangladesh, April to September 2026. Grey lines: share of the population under five, national (2022 census projection) and Rohingya camps (UNHCR, end 2025). Sources as in the table above."
-#| fig-alt: "Dot plot of reported percentages of cases under five and under nine months, by document date, with reference lines for the under-five share of the population."
-#| fig-height: 4
-
-camp_u5_pct <- 100 * sum(camp_pop_all$t_00_04) / sum(camp_pop_all$t_tl)
-age_shares <- context_figures |>
-  filter(grepl("^cases_age_", indicator)) |>
-  mutate(age_group = recode(indicator,
-                            cases_age_under5_pct = "Under 5 years",
-                            cases_age_under2_pct = "Under 2 years",
-                            cases_age_under9m_pct = "Under 9 months",
-                            cases_age_1_14y_pct = "1 to 14 years",
-                            .default = indicator),
-         case_base = coalesce(review_note, "not stated"))
-p <- ggplot(age_shares, aes(value, age_group,
-                            text = paste0(doc_id, "\n", case_base))) +
-  geom_vline(xintercept = 100 * u5_national, colour = col_reference,
-             linetype = "dotted") +
-  geom_vline(xintercept = camp_u5_pct, colour = col_reference,
-             linetype = "dashed") +
-  geom_point(colour = col_primary, size = 2, alpha = 0.7) +
-  annotate("text", x = 100 * u5_national, y = 0.6, label = "national",
-           hjust = 1.1, size = 3, colour = col_reference) +
-  annotate("text", x = camp_u5_pct, y = 0.6, label = "camps",
-           hjust = -0.1, size = 3, colour = col_reference) +
-  scale_x_continuous(limits = c(0, 100)) +
-  labs(x = "Share of cases (%)", y = NULL)
-ggplotly(p, tooltip = c("x", "text"))
-```
-
-```{r}
-#| label: tbl-camps
-#| tbl-cap: "Measles figures reported for the Rohingya camps, from Health Sector Cox's Bazar bulletins, WHO SEARO bulletins and UN RCO situation reports, 2026"
-
-camps_measles |>
-  arrange(doc_id, indicator) |>
-  transmute(indicator, value, period = period_text, note = review_note,
-            document = doc_id, published = published_date, entry = quote_type) |>
-  kable()
-```
-
-Cumulative camp counts are placed at the date the source gives them ("as of"), or at publication where the reviewer marked a count cumulative without a date.
-Month-only dates ("as of July") are placed at the end of the month.
-
-```{r}
-#| label: fig-camps
-#| fig-cap: "Cumulative suspected measles cases per 100,000 population: Rohingya camps as reported (points; denominator camps and Bhasan Char, UNHCR end 2025) and DGHS Cox's Bazar district (lines; denominators census projection alone, and census projection plus camps), Bangladesh, 2026. Sources: Health Sector Cox's Bazar, WHO SEARO and UN RCO documents; DGHS measles monitoring platform; UNHCR; 2022 census projection."
-#| fig-alt: "Points for cumulative camp suspected cases per 100,000 over time, with two lines for DGHS Cox's Bazar district cumulative suspected cases per 100,000 under two denominators."
-
-month_end <- function(m) {
-  ceiling_date(dmy(paste(1, m, 2026), quiet = TRUE), "month") - 1
-}
-as_of_date <- function(text) {
-  full <- str_match(text, "(?i)as of (\\d{1,2} [A-Za-z]+)")[, 2]
-  month <- str_match(text, "(?i)as of ([A-Za-z]+)")[, 2]
-  coalesce(dmy(paste(full, 2026), quiet = TRUE), month_end(month))
-}
-camp_cumulative <- camps_measles |>
-  filter(indicator == "camp_suspected_cases") |>
-  mutate(
-    reference_date = coalesce(
-      as_of_date(paste(period_text, quote)),
-      if_else(grepl("cumulative|to date", review_note, ignore.case = TRUE),
-              published_date, as.Date(NA))
-    )
-  ) |>
-  filter(!is.na(reference_date)) |>
-  distinct(reference_date, value, .keep_all = TRUE) |>
-  mutate(per_100k = 1e5 * value / sum(camp_pop_all$t_tl))
-
-camps_tl <- sum(camp_pop_all$t_tl[!grepl("Bhasan", camp_pop_all$location)])
-coxs_cum <- dist_daily |>
-  filter(district == "Cox's Bazar") |>
-  arrange(date) |>
-  mutate(cum = cumsum(suspected)) |>
-  filter(date >= first_daily) |>
-  transmute(date,
-            `Cox's Bazar, census population` = 1e5 * cum / coxs_pop,
-            `Cox's Bazar, census plus camps` = 1e5 * cum / (coxs_pop + camps_tl)) |>
-  pivot_longer(-date, names_to = "series", values_to = "per_100k")
-
-p <- ggplot() +
-  geom_line(data = coxs_cum, aes(date, per_100k, linetype = series),
-            colour = col_reference) +
-  geom_point(data = camp_cumulative,
-             aes(reference_date, per_100k,
-                 text = paste0(value, " suspected; ", doc_id)),
-             colour = col_highlight, size = 2.5) +
-  scale_x_date(date_labels = "%b") +
-  labs(x = NULL, y = "Cumulative suspected cases per 100,000",
-       linetype = NULL)
-ggplotly(p, tooltip = c("x", "y", "text"))
-```
-
-```{r}
-#| label: tbl-camp-population
-#| tbl-cap: "Population of Rohingya camps and Bhasan Char (UNHCR, end 2025) and Cox's Bazar district (2022 census projection)"
-
-camp_pop <- read.csv(here("data", "covariates", "camp_population.csv")) |>
-  filter(year == max(year), population_type == "REF",
-         grepl("Camp|RC|Bhasan Char", location))
-tibble::tibble(
-  population = c("Rohingya camps, Cox's Bazar (UNHCR)",
-                 "Bhasan Char (UNHCR)",
-                 "Cox's Bazar district (census projection)"),
-  total = c(sum(camp_pop$t_tl[!grepl("Bhasan", camp_pop$location)]),
-            sum(camp_pop$t_tl[grepl("Bhasan", camp_pop$location)]),
-            coxs_pop),
-  under_five = c(sum(camp_pop$t_00_04[!grepl("Bhasan", camp_pop$location)]),
-                 sum(camp_pop$t_00_04[grepl("Bhasan", camp_pop$location)]),
-                 pop2$pop_u5[pop2$adm2_pcode == coxs_pcode])
-) |>
-  mutate(under_five_pct = 100 * under_five / total) |>
-  kable(digits = 1, format.args = list(big.mark = ","))
-```
-
-Bhasan Char is in Noakhali district (Chattogram division).
-Cox's Bazar district suspected cases to cutoff: `r format(cum_table$suspected[cum_table$place == "Cox's Bazar district"], big.mark = ",")`.
-Whether camp cases are in the DGHS Cox's Bazar count is unknown (Q12).
-
-# Severity
-
-All DGHS cases are hospital admissions, so fatality ratios are hospital fatality ratios (HFR).
-
-```{r}
-#| label: inputs-severity
-
-weekly_sev <- div_daily |>
-  complete_weeks() |>
-  group_by(division, week_end) |>
-  summarise(across(c(suspected, confirmed, suspected_deaths,
-                     confirmed_deaths, admitted, discharged), sum),
-            .groups = "drop") |>
-  mutate(deaths_A = suspected_deaths,
-         deaths_B = suspected_deaths + confirmed_deaths)
-```
-
-```{r}
-#| label: fig-admission-ratio
-#| fig-cap: "Admissions per suspected case, by division and week, Bangladesh, weeks ending 14 April 2026 to cutoff. Source: DGHS measles monitoring platform, report date."
-#| fig-alt: "Line charts, one panel per division, of weekly admissions divided by suspected cases."
-
-p <- weekly_sev |>
-  mutate(ratio = admitted / suspected) |>
-  ggplot(aes(week_end, ratio)) +
-  geom_hline(yintercept = 1, colour = col_reference, linetype = "dotted") +
-  geom_line(colour = col_primary) +
-  facet_wrap(~division, ncol = 4) +
-  scale_x_date(date_labels = "%b") +
-  labs(x = "Week ending", y = "Admitted / suspected")
-ggplotly(p)
-```
-
-```{r}
-#| label: fig-hfr-resolved
-#| fig-cap: "HFR among resolved admissions, deaths / (deaths + discharges), by division and week, under reading A (suspected deaths include confirmed, black) and B (separate, red), Bangladesh, weeks ending 14 April 2026 to cutoff. Valid only if deaths are hospital deaths (Q7). Source: DGHS measles monitoring platform, report date."
-#| fig-alt: "Line charts, one panel per division, of weekly hospital fatality among resolved admissions under two readings of the death counts."
-
-hfr_resolved <- weekly_sev |>
-  mutate(A = deaths_A / (deaths_A + discharged),
-         B = deaths_B / (deaths_B + discharged)) |>
-  pivot_longer(c(A, B), names_to = "reading", values_to = "hfr")
-stopifnot(all(between(hfr_resolved$hfr, 0, 1), na.rm = TRUE))
-
-p <- ggplot(hfr_resolved, aes(week_end, hfr, colour = reading)) +
-  geom_line() +
-  facet_wrap(~division, ncol = 4) +
-  scale_colour_manual(values = c(A = col_primary, B = col_highlight)) +
-  scale_x_date(date_labels = "%b") +
-  labs(x = "Week ending", y = "Deaths / (deaths + discharges)",
-       colour = "Reading")
-ggplotly(p)
-```
-
-```{r}
-#| label: fig-deaths
-#| fig-cap: "Suspected and confirmed deaths per week, national, Bangladesh, weeks ending 14 April 2026 to cutoff. Source: DGHS measles monitoring platform, report date."
-#| fig-alt: "Line chart of weekly suspected deaths and confirmed deaths."
-
-deaths_weekly <- nat_daily |>
-  complete_weeks() |>
-  group_by(week_end) |>
-  summarise(`Suspected deaths` = sum(suspected_deaths),
-            `Confirmed deaths` = sum(confirmed_deaths)) |>
-  pivot_longer(-week_end, names_to = "measure", values_to = "deaths")
-p <- ggplot(deaths_weekly, aes(week_end, deaths, colour = measure)) +
-  geom_line() +
-  geom_point(size = 1) +
-  scale_colour_manual(values = c(`Suspected deaths` = col_primary,
-                                 `Confirmed deaths` = col_highlight)) +
-  scale_x_date(date_labels = "%b") +
-  labs(x = "Week ending", y = "Deaths per week", colour = NULL)
-ggplotly(p)
-```
-
-```{r}
-#| label: tbl-hfr
-#| tbl-cap: "Naive HFR, cumulative deaths / cumulative cases, by division, under readings A and B, Bangladesh, 15 March 2026 to cutoff. Source: DGHS measles monitoring platform."
-
-hfr_naive <- cum_table |>
-  filter(place %in% c(division_order, "National")) |>
-  transmute(
-    place, suspected, confirmed, suspected_deaths, confirmed_deaths,
-    hfr_A_pct = 100 * suspected_deaths / suspected,
-    hfr_B_pct = 100 * (suspected_deaths + confirmed_deaths) /
-      (suspected + confirmed)
-  )
-stopifnot(all(hfr_naive$suspected_deaths <= hfr_naive$suspected))
-kable(hfr_naive, digits = 2, format.args = list(big.mark = ","))
-```
-
-```{r}
-#| label: fig-wasting
-#| fig-cap: "Wasting among children under five (BDHS 2022) and naive HFR (reading A), by division, Bangladesh. Shown side by side, not fitted. Sources: DHS Program subnational indicators; DGHS measles monitoring platform."
-#| fig-alt: "Two dot plots side by side, divisions on the vertical axis: percentage of children wasted, and hospital fatality ratio."
-#| fig-height: 4
-
-dhs_path <- here("data", "covariates", "dhs_division.csv")
-if (file.exists(dhs_path)) {
-  wasting <- read.csv(dhs_path) |>
-    filter(indicator_short == "wasting") |>
-    transmute(place = division, value = value,
-              panel = paste0("Wasting, under five (%, ", survey, ")"))
-  hfr_dots <- hfr_naive |>
-    filter(place != "National") |>
-    transmute(place = as.character(place), value = hfr_A_pct,
-              panel = "Naive HFR, reading A (%)")
-  bind_rows(wasting, hfr_dots) |>
-    mutate(place = factor(place, levels = rev(division_order))) |>
-    ggplot(aes(value, place)) +
-    geom_point(colour = col_primary) +
-    facet_wrap(~panel, scales = "free_x") +
-    labs(x = NULL, y = NULL)
-}
-```
-
-## Delay-adjusted HFR
-
-First pass.
-The delay from admission to exit (discharge or death) is estimated by division from the daily series: expected exits on day $t$ are $p \sum_{d=0}^{D} A_{t-d} f(d)$, where $A$ is admissions, $f$ a discretised lognormal delay, $D$ = 30 days and $p$ the share of admissions with a recorded exit.
-Parameters are fitted by Poisson maximum likelihood on days from 8 May, so each day has 30 days of admissions behind it.
-That delay is then used as the delay from report to death in `cfr::cfr_static()`.
-This assumes deaths and discharges follow the same delay from admission, and both are counted by report date.
-
-Not reported: the fit does not identify the delay.
-In most divisions exits track admissions within a day or two, and in Rangpur, Dhaka, Mymensingh and Chattogram the fitted lognormal is degenerate (median under one day with very large spread, or median above the 30-day window).
-The code below is kept for the next attempt and is not run.
-
-```{r}
-#| label: fit-exit-delay
-#| eval: false
-
-max_delay <- 30
-delay_pmf <- function(meanlog, sdlog) {
-  pmf <- plnorm(1:(max_delay + 1), meanlog, sdlog) -
-    plnorm(0:max_delay, meanlog, sdlog)
-  pmf / sum(pmf)
-}
-# Expected exits: admissions convolved with the delay, scaled by p
-expected_exits <- function(admitted, pmf, p) {
-  p * as.numeric(stats::filter(admitted, pmf, method = "convolution",
-                               sides = 1))
-}
-fit_exit_delay <- function(d) {
-  d <- arrange(d, date)
-  nll <- function(par) {
-    mu <- expected_exits(d$admitted, delay_pmf(par[1], exp(par[2])),
-                         exp(par[3]))
-    keep <- !is.na(mu)
-    -sum(dpois(d$exits[keep], pmax(mu[keep], 1e-9), log = TRUE))
-  }
-  fit <- optim(c(log(5), log(0.5), 0), nll, method = "Nelder-Mead",
-               control = list(maxit = 5000))
-  meanlog <- fit$par[1]
-  sdlog <- exp(fit$par[2])
-  tibble(meanlog = meanlog, sdlog = sdlog, p = exp(fit$par[3]),
-         mean_days = exp(meanlog + sdlog^2 / 2),
-         median_days = exp(meanlog), converged = fit$convergence == 0)
-}
-
-exit_delays <- div_daily |>
-  filter(date >= first_daily) |>
-  mutate(exits = discharged + suspected_deaths) |>
-  group_by(division) |>
-  group_modify(~ fit_exit_delay(.x)) |>
-  ungroup()
-stopifnot(all(exit_delays$converged))
-```
-
-```{r}
-#| label: tbl-exit-delay
-#| eval: false
-#| tbl-cap: "Estimated delay from admission to exit (discharge or suspected death), by division, Bangladesh, 8 April 2026 to cutoff. Lognormal; p is exits per admission. Source: DGHS measles monitoring platform, report date."
-
-exit_delays |>
-  select(division, median_days, mean_days, sdlog, p) |>
-  kable(digits = 2)
-```
-
-```{r}
-#| label: fig-exit-fit
-#| eval: false
-#| fig-cap: "Observed exits per day (points) and exits expected from admissions and the estimated delay (line), by division, Bangladesh, 8 May 2026 to cutoff. Source: DGHS measles monitoring platform, report date."
-#| fig-alt: "Daily observed exits as points with the fitted expected exits as a line, one panel per division."
-#| fig-height: 6
-
-exit_fit <- div_daily |>
-  filter(date >= first_daily) |>
-  arrange(division, date) |>
-  mutate(exits = discharged + suspected_deaths) |>
-  left_join(exit_delays, by = "division") |>
-  group_by(division) |>
-  mutate(expected = expected_exits(admitted, delay_pmf(meanlog[1], sdlog[1]),
-                                   p[1])) |>
-  ungroup() |>
-  filter(!is.na(expected))
-p <- ggplot(exit_fit, aes(date)) +
-  geom_point(aes(y = exits), colour = col_reference, size = 0.6) +
-  geom_line(aes(y = expected), colour = col_primary) +
-  facet_wrap(~division, ncol = 4, scales = "free_y") +
-  scale_x_date(date_labels = "%b") +
-  labs(x = "Report date", y = "Exits per day")
-ggplotly(p)
-```
-
-```{r}
-#| label: tbl-hfr-delay
-#| eval: false
-#| tbl-cap: "Delay-adjusted HFR (%) with 95% interval, by division, under readings A and B, Bangladesh, 8 April 2026 to cutoff. Delay: estimated admission-to-exit delay for each division. Source: DGHS measles monitoring platform, report date."
-
-hfr_delay <- div_daily |>
-  filter(date >= first_daily) |>
-  arrange(division, date) |>
-  left_join(exit_delays, by = "division") |>
-  group_by(division) |>
-  group_modify(function(d, key) {
-    density <- function(x) {
-      plnorm(x + 1, d$meanlog[1], d$sdlog[1]) -
-        plnorm(x, d$meanlog[1], d$sdlog[1])
-    }
-    estimate <- function(cases, deaths) {
-      suppressMessages(cfr_static(
-        data.frame(date = d$date, cases = cases, deaths = deaths),
-        delay_density = density
-      ))
-    }
-    bind_rows(
-      A = estimate(d$suspected, d$suspected_deaths),
-      B = estimate(d$suspected + d$confirmed,
-                   d$suspected_deaths + d$confirmed_deaths),
-      .id = "reading"
-    )
-  }) |>
-  ungroup() |>
-  mutate(across(starts_with("severity"), \(x) 100 * x))
-hfr_delay |>
-  mutate(hfr_pct = sprintf("%.2f (%.2f to %.2f)", severity_estimate,
-                           severity_low, severity_high)) |>
-  select(division, reading, hfr_pct) |>
-  pivot_wider(names_from = reading, values_from = hfr_pct,
-              names_prefix = "reading_") |>
-  kable()
-```
-
-Naive HFR (`tbl-hfr`) includes the 15 March to 7 April lump; the delay-adjusted HFR starts on 8 April.
