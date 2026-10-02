@@ -63,17 +63,26 @@ raw[geography %in% names(NAMES), geography := NAMES[geography]]
 
 # ----------------------------------------------------------------- tidy ----
 
+# `reportCount` belongs to the call, not to a row: the national call's count
+# is national, and each division call's count is that division's. District
+# rows carry their division's count (no count per district is published).
+nat_reports <- raw[level == "division",
+                   .(report_count = report_count[1]), by = date]
+div_reports <- raw[level == "district",
+                   .(report_count = report_count[1]), by = .(date, division)]
+
 divs <- raw[level == "division",
     .(date, level, division, district = NA_character_, measure, value,
-      report_count, fetched_at)]
+      fetched_at)]
+divs <- merge(divs, div_reports, by = c("date", "division"), all.x = TRUE)
 dists <- raw[level == "district",
     .(date, level, division, district = geography, measure, value,
       report_count, fetched_at)]
 nat <- divs[, .(level = "national", division = NA_character_,
                 district = NA_character_, value = sum(value),
-                report_count = sum(report_count),
                 fetched_at = max(fetched_at)),
             by = .(date, measure)]
+nat <- merge(nat, nat_reports, by = "date", all.x = TRUE)
 
 cases <- rbind(nat, divs, dists, use.names = TRUE)
 cases[, flag := NA_character_]
@@ -115,9 +124,19 @@ chk_dates <- grid[, .(check = "no_missing_dates", date, division,
                       observed = as.integer(!is.na(present)),
                       pass = !is.na(present))]
 
+# Division report counts sum to the national report count.
+chk_reports <- merge(nat_reports[, .(date, expected = report_count)],
+                     div_reports[, .(observed = sum(report_count)), by = date],
+                     by = "date", all = TRUE)
+chk_reports[, `:=`(check = "division_reports_sum_to_national",
+                   division = NA_character_, measure = "report_count",
+                   pass = !is.na(expected) & !is.na(observed) &
+                       expected == observed)]
+
 cols <- c("check", "date", "division", "measure", "expected", "observed",
           "pass")
-checks <- rbind(chk_sum[, ..cols], chk_neg[, ..cols], chk_dates[, ..cols])
+checks <- rbind(chk_sum[, ..cols], chk_neg[, ..cols], chk_dates[, ..cols],
+                chk_reports[, ..cols])
 setorder(checks, check, date, division, measure)
 fwrite(checks, OUT_CHECKS)
 

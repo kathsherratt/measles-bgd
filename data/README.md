@@ -14,7 +14,7 @@ Canonical DGHS case series, from the platform dashboard. Written by `R/data/02-t
 | `district` | District, `NA` for national and division rows |
 | `measure` | `suspected`, `confirmed`, `suspected_deaths`, `confirmed_deaths`, `admitted`, `discharged`, `serum_sent` (all 24-hour counts) |
 | `value` | Count for that day |
-| `report_count` | Number of facility reports behind the value |
+| `report_count` | Reporting units that submitted that day: national for national rows, the division's for division rows; district rows carry their division's count (none is published per district). Outside Dhaka division a unit is a district civil surgeon office |
 | `fetched_at` | Vintage: when the value was fetched |
 | `flag` | `prelaunch_backfill` (7 April, holds 15 March to 7 April), `prelaunch_empty` (2 to 5 April), else `NA` |
 
@@ -26,7 +26,7 @@ One row per check, date, division and measure. Failures are recorded, not correc
 
 | column | meaning |
 |---|---|
-| `check` | `districts_sum_to_division`, `no_negative_values`, `no_missing_dates` (division level, from 10 April) |
+| `check` | `districts_sum_to_division`, `no_negative_values`, `no_missing_dates` (division level, from 10 April), `division_reports_sum_to_national` |
 | `date`, `division`, `measure` | Key of the check (`measure` is `NA` for missing dates) |
 | `expected`, `observed` | Expected and observed value (for `no_negative_values`, observed is the minimum) |
 | `pass` | Whether the check passed |
