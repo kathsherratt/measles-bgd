@@ -4,7 +4,9 @@
 # Run by launchd (R/schedule/uk.kathsherratt.measles-bgd.daily.plist) at 12:30
 # London time, after the platform publishes (16:41 Dhaka, 11:41 BST).
 # Fetches the dashboard from the last date already held (refetching it as a
-# check), tidies, then fetches, extracts and cross-checks the press releases.
+# check) to yesterday. Today is still filling at 12:30 (about 85% of facility
+# reports on 2 October), so it waits for the next run.
+# Then tidies, and fetches, extracts and cross-checks the press releases.
 # Steps run in order; a failure stops the run and is in the log.
 #
 # Usage:
@@ -25,7 +27,7 @@ if pgrep -f "R/data/01-fetch-dashboard.R" > /dev/null; then
 fi
 
 FROM=$(Rscript -e 'x <- data.table::fread(here::here("data","dghs-dashboard.csv"), select = "date"); cat(format(max(as.Date(x$date))))')
-TO=$(date +%F)
+TO=$(date -v-1d +%F)  # yesterday: today is incomplete until Dhaka midnight
 echo "$(date '+%F %T') dashboard $FROM to $TO"
 
 run() { echo "$(date '+%F %T') $*"; caffeinate -is Rscript "$@"; }
