@@ -1,0 +1,173 @@
+---
+title: "Data description"
+format:
+  html:
+    embed-resources: true
+    code-fold: true
+---
+
+- Scope: Familiarity and basic descriptive analysis of public data.
+- Authored: Kath Sherratt 1 Oct 2026
+- Context: Exploring public data downloads relevant to the 2026 measles outbreak.
+
+```{r}
+#| label: set-up
+
+library(here)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(ggplot2)
+theme_set(theme_bw() + theme(legend.position = "bottom"))
+```
+
+## Current outbreak
+
+### Daily DGHS data
+
+Outbreak case data from the DGHS.
+The DGHS started providing daily sitreps on 2 April 2026, and then a dashboard with daily numbers from 26 April.
+
+```{r}
+#| label: dghs-dashboard
+#| fig-cap: "DGHS daily reporting, 2026; black = total admissions, blue = lab-confirmed admissions, grey = suspected cases"
+
+dghs <- read.csv(here("data", "dghs-cases.csv"))
+dghs <- dghs |> mutate(date = ymd(date))
+dghs_national <- filter(dghs, level == "national") |>
+    select(date, measure, value)
+tail(dghs_national)
+
+dghs_national |>
+    filter(measure %in% c("confirmed", "admitted", "suspected")) |>
+    filter(date >= "2026-04-26") |>
+    pivot_wider(names_from = measure, values_from = value) |>
+    mutate(total = confirmed + admitted) |>
+    ggplot(aes(x = date)) +
+    geom_point(aes(y = total)) +
+    geom_line(aes(y = total)) +
+    geom_point(aes(y = confirmed), colour = "blue", alpha = 0.5) +
+    geom_point(aes(y = suspected), colour = "grey", alpha = 0.5) +
+    labs(y = NULL, x = NULL)
+```
+
+We know the outbreak started much earlier than this.
+The daily sitreps start by reporting a cumulative outbreak size from 15 March to 2 April that totalled 7467 admissions in that period:
+
+```{r}
+#| label: pre-dashboard-cumulative
+
+dghs_national |> filter(date == ymd("2026-04-07")) |> select(-date)
+```
+
+Looking at all this cumulatively in the population:
+
+```{r}
+# TODO cumulative plot per 100k population
+```
+
+### Hospital admissions and deaths
+
+The DGHS dashboard counts come from medical facilities reporting hospital admissions.
+This includes suspected, clinically confirmed, and lab-confirmed measles admissions; confirmed deaths, and suspected deaths.
+
+```{r}
+#| label: dghs-case-death
+
+case_death <- dghs_national |>
+    filter(measure %in% c("confirmed", "confirmed_deaths")) |>
+    filter(date >= "2026-04-26") |>
+    pivot_wider(names_from = measure, values_from = value) |>
+    mutate(death_case = confirmed_deaths / confirmed)
+tail(case_death)
+
+case_death |> 
+    ggplot(aes(x = date)) +
+    geom_point(aes(y = confirmed_deaths)) +
+    geom_line(aes(y = confirmed)) +
+    labs(y = NULL, x = NULL)
+```
+
+### Lab testing
+
+We can roughly guess at test positivity by looking at share of confirmed cases to serum-samples sent for testing.^[I'm not clear whether confirmed-deaths are the outcome of confirmed-cases or if these were tested separately.
+I am excluding these to avoid risk of double-counting.]
+
+```{r}
+#| label: dghs-lab-confirmation
+
+test_pos <- dghs_national |>
+    filter(measure %in% c("confirmed", "serum_sent")) |>
+    filter(date >= "2026-04-26") |>
+    pivot_wider(names_from = measure, values_from = value) |>
+    mutate(test_pos = confirmed / serum_sent)
+tail(test_pos)
+
+#TODO check and note the early spike (backfill?)
+
+test_pos |> 
+    ggplot(aes(x = date)) +
+    geom_point(aes(y = test_pos)) +
+    geom_line(aes(y = test_pos)) +
+    geom_smooth(aes(y = test_pos), method = "gam", formula = y ~ s(x, bs = "cs"), 
+    alpha = 0.5, col = "grey") +
+    labs(y = NULL, x = NULL)
+```
+
+## Spatial spread
+
+--------------------------------------------------------------------------------
+
+## Public health response
+
+### Pre-outbreak vaccination coverage
+
+### Responsive vaccination campaign
+
+--------------------------------------------------------------------------------
+
+## Context
+
+### Determinants of severe disease
+
+#### Malnutrition prevalence, regional
+
+```{r}
+#| label: malnutrition-map
+```
+
+### Historic trends
+
+#### Measles case reporting
+
+WHO provides a monthly timeseries of case reports since 2012.
+The "total" case count adds epi-linked, clinically diagnosed, and lab-confirmed cases.
+We also have a count of suspected cases.
+
+```{r}
+#| label: who-historic
+
+who <- read.csv(here("data", "who-monthly.csv"))
+who_long <- who |> 
+    select("year", "month", "measles_total", "measles_suspect") |>
+    mutate(date = make_date(year, month, 1))
+tail(who_long)
+```
+
+For a baseline comparison, we plot this over the past few years up to October 2025:
+
+```{r}
+#| label: who-historic-plot
+#| fig-cap: "WHO monthly measles case reporting, 2012-2025; black = total cases, grey = suspected"
+
+who_long |>
+    filter(date >= "2020-09-01" & date <= "2025-09-01") |>
+    ggplot(aes(x = date)) +
+    geom_point(aes(y = measles_total)) +
+    geom_line(aes(y = measles_total)) +
+    geom_point(aes(y = measles_suspect), 
+    colour = "grey", alpha = 0.5) +
+    labs(y = NULL, x = NULL)
+```
+
+#### Vaccination coverage
