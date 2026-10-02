@@ -1,10 +1,10 @@
 # data/
 
-DGHS figures are not committed (`.gitignore`) until publication terms are agreed. Regenerate them with the scripts in `R/data/`.
+Regenerate data with the scripts in `R/data/`.
 
 ## dghs-cases.csv
 
-Canonical DGHS case series, from the platform dashboard. Written by `R/data/02-tidy-dashboard.R`. Long format, latest vintage of each value.
+DGHS case series from the measles dashboard with the latest vintage of each value.
 
 | column | meaning |
 |---|---|
@@ -18,7 +18,7 @@ Canonical DGHS case series, from the platform dashboard. Written by `R/data/02-t
 | `fetched_at` | Vintage: when the value was fetched |
 | `flag` | `prelaunch_backfill` (7 April, holds 15 March to 7 April), `prelaunch_empty` (2 to 5 April), else `NA` |
 
-National rows are the sum of divisions. `discharged` is "Recovered" in the dashboard's Excel export, which omits `serum_sent`.
+National rows are the sum of divisions. 
 
 ## dghs-cases-checks.csv
 
@@ -42,3 +42,7 @@ One row per check, date, division and measure. Failures are recorded, not correc
 - `manifest-covariates.csv`: source URLs and hashes of covariate downloads.
 - `raw/`: raw downloads, not committed.
 - Press-release extraction lives in `sitrep/data/`.
+
+Vaccination data:
+
+-  UNICEF MICS 2025: https://mics.unicef.org/surveys?f[0]=region:3781
