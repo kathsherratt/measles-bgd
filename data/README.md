@@ -35,7 +35,7 @@ One row per check, date, division and measure. Failures are recorded, not correc
 
 - `dghs-dashboard.csv`: raw dashboard vintages, as fetched by `R/data/01-fetch-dashboard.R`. Read `dghs-cases.csv` instead.
 - `who-monthly.csv`: WHO monthly surveillance counts (CC BY-NC-SA 3.0 IGO, not committed), from `R/data/03-fetch-who-monthly.R`.
-- `covariates/`: boundaries, population, DHS, WUENIC, UNICEF wasting and camps, from `R/data/05-fetch-covariates.R`. Two files are not committed until licences are checked.
+- `covariates/`: boundaries, population, DHS, WUENIC, UNICEF wasting, camp outlines, camp population (UNHCR, `camp_population.csv`) and hospitals (Healthsites.io from OpenStreetMap, ODbL, `hospitals.csv`), from `R/data/05-fetch-covariates.R`. Medical college hospitals are checked by hand in `assets/medical-colleges.csv` (government or private; the OSM list is incomplete). Two files are not committed until licences are checked.
 - `parameters/`: epireview-schema parameters extracted from the literature (see its README).
 - `manifest-context.csv`: source URLs and hashes of context documents from `R/data/04-fetch-context.R`.
 - `manifest-covariates.csv`: source URLs and hashes of covariate downloads.

@@ -38,11 +38,23 @@
 #'                    UNICEF/WHO/World Bank Joint Malnutrition Estimates
 #'                    (wasting < -2 SD and severe wasting < -3 SD). The CSV
 #'                    covers all countries; Bangladesh rows are kept.
-#'   Camp population  HDX is searched for UNHCR/ISCG Rohingya population by
-#'                    camp dated 2025 or 2026. Candidates are logged. Nothing
-#'                    is written unless a camp-level resource is found: the
-#'                    by-camp UNHCR/RRRC registration series on HDX stops in
-#'                    2021.
+#'   bangladesh-healthsites
+#'                    Healthsites.io health facilities (OpenStreetMap, ODbL:
+#'                    attribute "© OpenStreetMap contributors"). Hospitals
+#'                    only, assigned to division and district by location.
+#'                    `medical_college` flags "medical college" in the name,
+#'                    which marks likely referral hospitals; OSM does not say
+#'                    which are government (`operator_type` is mostly blank),
+#'                    so that is confirmed by hand in
+#'                    assets/medical-colleges.csv. OSM completeness varies by
+#'                    district, so counts are context, not a facility census.
+#'   unhcr-population-data-for-bgd
+#'                    UNHCR end-year stock of Myanmar-origin refugees by
+#'                    location (each camp, Bhasan Char), with sex and age
+#'                    bands (CC BY-IGO). Annual: the 2025 figures are the
+#'                    latest. A monthly national total exists
+#'                    (`bgd-forcibly-displaced-population-by-origin`) but its
+#'                    population group label is unclear, so it is not used.
 #'
 #' Usage:
 #'     Rscript R/data/05-fetch-covariates.R [--refresh]
@@ -114,7 +126,7 @@ fetch_resource <- function(pkg_id, pattern) {
     dir <- file.path(RAW_DIR, pkg_id)
     dir.create(dir, recursive = TRUE, showWarnings = FALSE)
     ext <- tolower(tools::file_ext(sub("\\?.*$", "", res$url)))
-    if (!nzchar(ext) || nchar(ext) > 5) ext <- "csv"
+    if (!nzchar(ext) || nchar(ext) > 7) ext <- "csv"
     path <- file.path(dir, paste0(
         gsub("[^A-Za-z0-9]+", "-", tools::file_path_sans_ext(res$name)), ".", ext
     ))
@@ -320,38 +332,58 @@ setorder(unicef, indicator_id, time_period, sex, age, wealth_quintile, residence
 fwrite(unicef, file.path(OUT_DIR, "unicef_wasting.csv"))
 message("wrote unicef_wasting.csv: ", nrow(unicef), " rows")
 
+# ------------------------------------------------------------ hospitals ----
+
+# The CSV has no coordinates for hospitals mapped as polygons (OSM ways),
+# which include most large hospitals, so the GeoJSON is used; polygons are
+# reduced to a point on their surface.
+hs_sf <- st_read(fetch_resource("bangladesh-healthsites",
+                                "bangladesh-healthsites-geojson"), quiet = TRUE)
+hs_sf <- hs_sf[hs_sf$amenity %in% "hospital", c("osm_id", "osm_type", "name",
+                                                 "operator_type")]
+old_s2 <- sf_use_s2(FALSE)
+hs_sf <- suppressWarnings(st_point_on_surface(st_make_valid(hs_sf)))
+xy <- st_coordinates(hs_sf)
+hs <- as.data.table(st_drop_geometry(hs_sf))[, `:=`(lon = xy[, 1],
+                                                     lat = xy[, 2])]
+# Points on simplified borders can fall in a sliver: nearest district then.
+idx <- suppressMessages(st_within(hs_sf, adm2))
+idx <- vapply(idx, function(i) if (length(i)) i[1] else NA_integer_, 1L)
+miss <- is.na(idx)
+if (any(miss)) {
+    idx[miss] <- suppressMessages(st_nearest_feature(hs_sf[miss, ], adm2))
+}
+sf_use_s2(old_s2)
+hs[, `:=`(adm1_pcode = adm2$adm1_pcode[idx], adm2_pcode = adm2$adm2_pcode[idx],
+          district = adm2$adm2_name[idx],
+          assigned_by = fifelse(miss, "nearest", "within"),
+          medical_college = grepl("medical college", name, ignore.case = TRUE))]
+setorder(hs, adm2_pcode, name)
+fwrite(hs, file.path(OUT_DIR, "hospitals.csv"))
+message("wrote hospitals.csv: ", nrow(hs), " hospitals, ",
+        sum(hs$medical_college), " medical colleges, ", sum(miss),
+        " assigned to nearest district")
+
 # ------------------------------------------------------ camp population ----
 
-# HDX has no consistent by-camp population dataset for 2025-2026, so search
-# and log candidates: resources dated 2025 or 2026 in Rohingya/refugee
-# datasets, by name or file name, that mention camps or population.
-cand <- rbindlist(lapply(c(
-    "rohingya population camp UNHCR", "Rohingya refugee population by camp",
-    "Cox's Bazar refugee population registration"
-), function(q) {
-    pk <- hdx_search(q)
-    if (!length(pk)) return(NULL)
-    rbindlist(lapply(seq_len(nrow(pk)), function(i) {
-        r <- pk$resources[[i]]
-        if (is.null(r) || !nrow(r)) return(NULL)
-        data.table(dataset = pk$name[i], title = pk$title[i],
-                   resource = r$name, format = r$format,
-                   last_modified = r$last_modified)
-    }))
-}), fill = TRUE)
-cand <- unique(cand)[
-    grepl("rohingya|bangladesh|bgd|cox", paste(dataset, title), ignore.case = TRUE) &
-        grepl("202[56]", paste(resource, last_modified)) &
-        grepl("camp|popul|registration", resource, ignore.case = TRUE) &
-        format %in% c("CSV", "XLSX", "XLS")
-]
-if (nrow(cand)) {
-    message("camp population candidates (inspect before use):")
-    print(cand[, .(dataset, resource, format, last_modified)])
-} else {
-    message("no 2025-2026 camp population resource found on HDX; ",
-            "camp_population.csv not written")
-}
+# UNHCR end-year stock by location, with age bands. Myanmar-origin rows only
+# (camps, Bhasan Char, and a few dispersed rows). Annual, so the latest year
+# is the end of the previous calendar year.
+unhcr <- fread(fetch_resource(
+    "unhcr-population-data-for-bgd",
+    "Demographics and locations of forcibly displaced and stateless people residing"
+))
+unhcr <- unhcr[`Country of Origin Code` == "MMR"]
+camp_pop <- unhcr[, .(
+    year = Year, location, population_type = `Population Type`,
+    accommodation_type = accommodationType,
+    f_00_04 = `Female 0-4`, m_00_04 = `Male 0-4`,
+    t_00_04 = `Female 0-4` + `Male 0-4`, t_tl = Total
+)]
+setorder(camp_pop, year, location)
+fwrite(camp_pop, file.path(OUT_DIR, "camp_population.csv"))
+message("wrote camp_population.csv: ", nrow(camp_pop), " rows, ",
+        min(camp_pop$year), "-", max(camp_pop$year))
 
 # ------------------------------------------------------------- manifest ----
 
