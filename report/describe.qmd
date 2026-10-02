@@ -5,7 +5,9 @@ format:
   html:
     toc: true
     toc-depth: 3
-    embed-resources: false
+    embed-resources: true
+    code-fold: true
+    code-tools: true
     fig-width: 9
     fig-height: 6
 execute:
@@ -40,6 +42,7 @@ library(plotly)
 library(sf)
 library(slider)
 library(knitr)
+library(cfr)
 
 # visualise-data palette
 col_primary <- "#1a1a1a"
@@ -999,13 +1002,130 @@ if (file.exists(dhs_path)) {
 
 ## Delay-adjusted HFR
 
-Not run.
-Waits on agreement of the delay from report to death report (`docs/describe-spec.md`, Severity).
+First pass.
+The delay from admission to exit (discharge or death) is estimated by division from the daily series: expected exits on day $t$ are $p \sum_{d=0}^{D} A_{t-d} f(d)$, where $A$ is admissions, $f$ a discretised lognormal delay, $D$ = 30 days and $p$ the share of admissions with a recorded exit.
+Parameters are fitted by Poisson maximum likelihood on days from 8 May, so each day has 30 days of admissions behind it.
+That delay is then used as the delay from report to death in `cfr::cfr_static()`.
+This assumes deaths and discharges follow the same delay from admission, and both are counted by report date.
+
+Not reported: the fit does not identify the delay.
+In most divisions exits track admissions within a day or two, and in Rangpur, Dhaka, Mymensingh and Chattogram the fitted lognormal is degenerate (median under one day with very large spread, or median above the 30-day window).
+The code below is kept for the next attempt and is not run.
+
+```{r}
+#| label: fit-exit-delay
+#| eval: false
+
+max_delay <- 30
+delay_pmf <- function(meanlog, sdlog) {
+  pmf <- plnorm(1:(max_delay + 1), meanlog, sdlog) -
+    plnorm(0:max_delay, meanlog, sdlog)
+  pmf / sum(pmf)
+}
+# Expected exits: admissions convolved with the delay, scaled by p
+expected_exits <- function(admitted, pmf, p) {
+  p * as.numeric(stats::filter(admitted, pmf, method = "convolution",
+                               sides = 1))
+}
+fit_exit_delay <- function(d) {
+  d <- arrange(d, date)
+  nll <- function(par) {
+    mu <- expected_exits(d$admitted, delay_pmf(par[1], exp(par[2])),
+                         exp(par[3]))
+    keep <- !is.na(mu)
+    -sum(dpois(d$exits[keep], pmax(mu[keep], 1e-9), log = TRUE))
+  }
+  fit <- optim(c(log(5), log(0.5), 0), nll, method = "Nelder-Mead",
+               control = list(maxit = 5000))
+  meanlog <- fit$par[1]
+  sdlog <- exp(fit$par[2])
+  tibble(meanlog = meanlog, sdlog = sdlog, p = exp(fit$par[3]),
+         mean_days = exp(meanlog + sdlog^2 / 2),
+         median_days = exp(meanlog), converged = fit$convergence == 0)
+}
+
+exit_delays <- div_daily |>
+  filter(date >= first_daily) |>
+  mutate(exits = discharged + suspected_deaths) |>
+  group_by(division) |>
+  group_modify(~ fit_exit_delay(.x)) |>
+  ungroup()
+stopifnot(all(exit_delays$converged))
+```
+
+```{r}
+#| label: tbl-exit-delay
+#| eval: false
+#| tbl-cap: "Estimated delay from admission to exit (discharge or suspected death), by division, Bangladesh, 8 April 2026 to cutoff. Lognormal; p is exits per admission. Source: DGHS measles monitoring platform, report date."
+
+exit_delays |>
+  select(division, median_days, mean_days, sdlog, p) |>
+  kable(digits = 2)
+```
+
+```{r}
+#| label: fig-exit-fit
+#| eval: false
+#| fig-cap: "Observed exits per day (points) and exits expected from admissions and the estimated delay (line), by division, Bangladesh, 8 May 2026 to cutoff. Source: DGHS measles monitoring platform, report date."
+#| fig-alt: "Daily observed exits as points with the fitted expected exits as a line, one panel per division."
+#| fig-height: 6
+
+exit_fit <- div_daily |>
+  filter(date >= first_daily) |>
+  arrange(division, date) |>
+  mutate(exits = discharged + suspected_deaths) |>
+  left_join(exit_delays, by = "division") |>
+  group_by(division) |>
+  mutate(expected = expected_exits(admitted, delay_pmf(meanlog[1], sdlog[1]),
+                                   p[1])) |>
+  ungroup() |>
+  filter(!is.na(expected))
+p <- ggplot(exit_fit, aes(date)) +
+  geom_point(aes(y = exits), colour = col_reference, size = 0.6) +
+  geom_line(aes(y = expected), colour = col_primary) +
+  facet_wrap(~division, ncol = 4, scales = "free_y") +
+  scale_x_date(date_labels = "%b") +
+  labs(x = "Report date", y = "Exits per day")
+ggplotly(p)
+```
 
 ```{r}
 #| label: tbl-hfr-delay
 #| eval: false
+#| tbl-cap: "Delay-adjusted HFR (%) with 95% interval, by division, under readings A and B, Bangladesh, 8 April 2026 to cutoff. Delay: estimated admission-to-exit delay for each division. Source: DGHS measles monitoring platform, report date."
 
-# cfr::cfr_static() and cfr::cfr_rolling() by division, over a grid of
-# gamma delays (mean 5, 10, 15 days; CV 0.5), readings A and B.
+hfr_delay <- div_daily |>
+  filter(date >= first_daily) |>
+  arrange(division, date) |>
+  left_join(exit_delays, by = "division") |>
+  group_by(division) |>
+  group_modify(function(d, key) {
+    density <- function(x) {
+      plnorm(x + 1, d$meanlog[1], d$sdlog[1]) -
+        plnorm(x, d$meanlog[1], d$sdlog[1])
+    }
+    estimate <- function(cases, deaths) {
+      suppressMessages(cfr_static(
+        data.frame(date = d$date, cases = cases, deaths = deaths),
+        delay_density = density
+      ))
+    }
+    bind_rows(
+      A = estimate(d$suspected, d$suspected_deaths),
+      B = estimate(d$suspected + d$confirmed,
+                   d$suspected_deaths + d$confirmed_deaths),
+      .id = "reading"
+    )
+  }) |>
+  ungroup() |>
+  mutate(across(starts_with("severity"), \(x) 100 * x))
+hfr_delay |>
+  mutate(hfr_pct = sprintf("%.2f (%.2f to %.2f)", severity_estimate,
+                           severity_low, severity_high)) |>
+  select(division, reading, hfr_pct) |>
+  pivot_wider(names_from = reading, values_from = hfr_pct,
+              names_prefix = "reading_") |>
+  kable()
 ```
+
+Naive HFR (`tbl-hfr`) includes the 15 March to 7 April lump; the delay-adjusted HFR starts on 8 April.
