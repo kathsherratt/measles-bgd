@@ -10,10 +10,6 @@ DGHS holds all rights to its data and press releases.
 
 | File | What it is |
 |----------------------------|--------------------------------------------|
-| `docs/plan.md` | Sources, reporting delays, line-list and CFR plans |
-| `docs/first-steps.md` | The next steps with workflow conventions |
-| `docs/vaccination.md` | Possible vaccination and intervention analysis |
-| `docs/who-questions.md` | Questions for WHO |
 | `sitrep/docs/extraction.md` | Design of the press-release extraction |
 | `sitrep/docs/bangla-review.md` | Readings of Bengali text TBC |
 

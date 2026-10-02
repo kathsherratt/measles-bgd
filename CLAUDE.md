@@ -12,7 +12,7 @@ Analysis of the 2026 measles outbreak in Bangladesh, with WHO and the Ministry o
 
 Refugee camps and malnutrition are cross-cutting. Public and private (WHO line list) analyses run side by side. IEDCR (government) is a likely partner and works in R, so code should run on their machines.
 
-Read first: `docs/first-steps.md` (priorities, conventions, data needed for aims 2 and 3), then `docs/plan.md`. Open questions for WHO and IEDCR are in `docs/who-questions.md`.
+Read first (in `sandbox/`, gitignored; planning notes kept private): `sandbox/first-steps.md` (priorities, conventions, data needed for aims 2 and 3), then `sandbox/plan.md`. Open questions for WHO and IEDCR are in `sandbox/who-questions.md`.
 
 ## Hard rules
 
@@ -45,7 +45,7 @@ Running `R/data/01-fetch-dashboard.R`: the platform publishes each day at 16:41 
 - The platform dashboard (`R/data/01-fetch-dashboard.R`) is the primary DGHS source: it is what DGHS publishes as data (its Excel export is built from the same JSON). The press releases are the same counts and are secondary: used for the period before the platform, footnotes, campaign tables, and cross-checks. Published days are final; the platform puts corrections on the right days. There is no public reporting triangle.
 - WHO monthly surveillance is a different stream (EPI case investigations, close to the line list). From June it stopped epi-linking and tests nearly every suspect, so its fall after May is partly a change in classification. Among tested suspects, lab positivity is 45 to 70% (1 to 7% in 2025).
 - The national daily count (about 1,000) is the sum of staggered division epidemics; work by division.
-- Details and numbers are in `docs/plan.md`.
+- Details and numbers are in `sandbox/plan.md`.
 
 ## Conventions
 

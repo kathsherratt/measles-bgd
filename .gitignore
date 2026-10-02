@@ -82,3 +82,5 @@ data/who-monthly.csv
 
 # Editor workspace
 *.code-workspace
+
+sandbox/
