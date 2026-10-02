@@ -23,7 +23,8 @@
 #' published_date, page, indicator, value, unit, denominator (a case or child
 #' count in the same sentence, else NA), geography (place names found in the
 #' sentence, else "not stated"), period_text (date or week phrases in the
-#' sentence), quote, quote_type (sentence or line), confirmed_by.
+#' sentence), quote, quote_type (sentence, line or manual), confirmed_by,
+#' review_note.
 #'
 #' Indicator vocabulary, context-figures.csv (unit pct unless stated):
 #'   cases_age_under5_pct, cases_age_under2_pct, cases_age_under9m_pct,
@@ -42,8 +43,11 @@
 #'   camp_deaths, camp_admissions
 #'   Cumulative or period is not an indicator; read it from period_text.
 #'
-#' Re-running merges on `id`: rows with `confirmed_by` filled are kept as
-#' they are; unconfirmed rows are regenerated.
+#' Re-running merges on `id`: rows with `confirmed_by` or `review_note`
+#' filled, and hand-entered rows (`quote_type = "manual"`, entered by a
+#' person where the text layer is garbled), are kept as they are; other
+#' rows are regenerated. `review_note` holds the reviewer's note, e.g. the
+#' case base ("lab-confirmed cases") or whether a count is cumulative.
 #'
 #' Usage:
 #'     Rscript R/data/06-extract-context-figures.R
@@ -458,7 +462,7 @@ extract_doc <- function(row, kind) {
 
 COLS <- c("id", "source", "doc_id", "published_date", "page", "indicator",
           "value", "unit", "denominator", "geography", "period_text",
-          "quote", "quote_type", "confirmed_by")
+          "quote", "quote_type", "confirmed_by", "review_note")
 
 finish <- function(x) {
   if (is.null(x) || nrow(x) == 0) {
@@ -468,18 +472,24 @@ finish <- function(x) {
     mutate(
       id = map_chr(paste(doc_id, page, quote, indicator), rlang::hash) |>
         str_sub(1, 12),
-      confirmed_by = NA_character_
+      confirmed_by = NA_character_,
+      review_note = NA_character_
     ) |>
     distinct(id, .keep_all = TRUE) |>
     select(all_of(COLS))
 }
 
-# Rows a person has confirmed are never overwritten.
+# Rows a person has confirmed or annotated, and hand-entered rows
+# (`quote_type = "manual"`), are never overwritten.
 merge_confirmed <- function(new, path) {
   if (!file.exists(path)) return(new)
   old <- read_csv(path, col_types = cols(.default = col_character()),
                   show_col_types = FALSE)
-  old <- old |> filter(!is.na(confirmed_by), nzchar(confirmed_by))
+  if (!"review_note" %in% names(old)) old$review_note <- NA_character_
+  old <- old |>
+    filter((!is.na(confirmed_by) & nzchar(confirmed_by)) |
+             (!is.na(review_note) & nzchar(review_note)) |
+             quote_type %in% "manual")
   new_cols <- new |>
     mutate(across(everything(), as.character))
   bind_rows(old, new_cols |> filter(!id %in% old$id)) |>

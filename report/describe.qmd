@@ -43,6 +43,7 @@ library(sf)
 library(slider)
 library(knitr)
 library(cfr)
+library(stringr)
 
 # visualise-data palette
 col_primary <- "#1a1a1a"
@@ -832,30 +833,130 @@ Campaign coverage by division and city corporation (`fig-campaign-coverage`) wai
 #| label: inputs-among-whom
 
 read_confirmed <- function(path) {
-  if (!file.exists(path)) return(NULL)
-  d <- read.csv(path, colClasses = c(confirmed_by = "character"))
-  filter(d, !is.na(confirmed_by), confirmed_by != "")
+  d <- read.csv(path, colClasses = "character", na.strings = c("", "NA"))
+  d |>
+    filter(!is.na(confirmed_by)) |>
+    mutate(value = as.numeric(value),
+           published_date = ymd(published_date, quiet = TRUE))
 }
 context_figures <- read_confirmed(here("data", "context-figures.csv"))
+camp_pop_all <- read.csv(here("data", "covariates", "camp_population.csv")) |>
+  filter(year == max(year), population_type == "REF",
+         grepl("Camp|RC|Bhasan Char", location))
 camps_measles <- read_confirmed(here("data", "camps-measles.csv"))
-n_confirmed <- c(context = NROW(context_figures), camps = NROW(camps_measles))
-n_confirmed
+c(context = nrow(context_figures), camps = nrow(camps_measles))
 ```
 
-Age, sex and vaccination figures (`tbl-reported-figures`, `fig-age-shares`) and camp figures (`tbl-camps`, `fig-camps`) show only rows a person has confirmed in `data/context-figures.csv` and `data/camps-measles.csv`.
+Only rows a person has confirmed against the source (`confirmed_by` in `data/context-figures.csv` and `data/camps-measles.csv`) are shown.
+Case base and period are from the reviewer's note (`review_note`).
+Rows marked `manual` were entered by the reviewer where the PDF text layer is garbled.
 
 ```{r}
 #| label: tbl-reported-figures
-#| tbl-cap: "Reported measles case figures by age, sex and vaccination status, from WHO, UN and UNICEF documents, Bangladesh, 2026"
+#| tbl-cap: "Reported measles case figures by age and vaccination status, from WHO, UN and UNICEF documents, Bangladesh, 2026"
 
-if (n_confirmed[["context"]] > 0) {
-  context_figures |>
-    select(source, doc_id, published_date, page, indicator, value, unit,
-           denominator, geography, quote) |>
-    kable()
-} else {
-  cat("No confirmed rows yet.")
+context_figures |>
+  arrange(indicator, published_date) |>
+  transmute(indicator, value, unit, case_base = review_note,
+            document = doc_id, published = published_date, page,
+            entry = quote_type) |>
+  kable()
+```
+
+```{r}
+#| label: fig-age-shares
+#| fig-cap: "Share of measles cases by age group, as reported in WHO, UN and UNICEF documents, Bangladesh, April to September 2026. Grey lines: share of the population under five, national (2022 census projection) and Rohingya camps (UNHCR, end 2025). Sources as in the table above."
+#| fig-alt: "Dot plot of reported percentages of cases under five and under nine months, by document date, with reference lines for the under-five share of the population."
+#| fig-height: 4
+
+camp_u5_pct <- 100 * sum(camp_pop_all$t_00_04) / sum(camp_pop_all$t_tl)
+age_shares <- context_figures |>
+  filter(grepl("^cases_age_", indicator)) |>
+  mutate(age_group = recode(indicator,
+                            cases_age_under5_pct = "Under 5 years",
+                            cases_age_under2_pct = "Under 2 years",
+                            cases_age_under9m_pct = "Under 9 months",
+                            cases_age_1_14y_pct = "1 to 14 years",
+                            .default = indicator),
+         case_base = coalesce(review_note, "not stated"))
+p <- ggplot(age_shares, aes(value, age_group,
+                            text = paste0(doc_id, "\n", case_base))) +
+  geom_vline(xintercept = 100 * u5_national, colour = col_reference,
+             linetype = "dotted") +
+  geom_vline(xintercept = camp_u5_pct, colour = col_reference,
+             linetype = "dashed") +
+  geom_point(colour = col_primary, size = 2, alpha = 0.7) +
+  annotate("text", x = 100 * u5_national, y = 0.6, label = "national",
+           hjust = 1.1, size = 3, colour = col_reference) +
+  annotate("text", x = camp_u5_pct, y = 0.6, label = "camps",
+           hjust = -0.1, size = 3, colour = col_reference) +
+  scale_x_continuous(limits = c(0, 100)) +
+  labs(x = "Share of cases (%)", y = NULL)
+ggplotly(p, tooltip = c("x", "text"))
+```
+
+```{r}
+#| label: tbl-camps
+#| tbl-cap: "Measles figures reported for the Rohingya camps, from Health Sector Cox's Bazar bulletins, WHO SEARO bulletins and UN RCO situation reports, 2026"
+
+camps_measles |>
+  arrange(doc_id, indicator) |>
+  transmute(indicator, value, period = period_text, note = review_note,
+            document = doc_id, published = published_date, entry = quote_type) |>
+  kable()
+```
+
+Cumulative camp counts are placed at the date the source gives them ("as of"), or at publication where the reviewer marked a count cumulative without a date.
+Month-only dates ("as of July") are placed at the end of the month.
+
+```{r}
+#| label: fig-camps
+#| fig-cap: "Cumulative suspected measles cases per 100,000 population: Rohingya camps as reported (points; denominator camps and Bhasan Char, UNHCR end 2025) and DGHS Cox's Bazar district (lines; denominators census projection alone, and census projection plus camps), Bangladesh, 2026. Sources: Health Sector Cox's Bazar, WHO SEARO and UN RCO documents; DGHS measles monitoring platform; UNHCR; 2022 census projection."
+#| fig-alt: "Points for cumulative camp suspected cases per 100,000 over time, with two lines for DGHS Cox's Bazar district cumulative suspected cases per 100,000 under two denominators."
+
+month_end <- function(m) {
+  ceiling_date(dmy(paste(1, m, 2026), quiet = TRUE), "month") - 1
 }
+as_of_date <- function(text) {
+  full <- str_match(text, "(?i)as of (\\d{1,2} [A-Za-z]+)")[, 2]
+  month <- str_match(text, "(?i)as of ([A-Za-z]+)")[, 2]
+  coalesce(dmy(paste(full, 2026), quiet = TRUE), month_end(month))
+}
+camp_cumulative <- camps_measles |>
+  filter(indicator == "camp_suspected_cases") |>
+  mutate(
+    reference_date = coalesce(
+      as_of_date(paste(period_text, quote)),
+      if_else(grepl("cumulative|to date", review_note, ignore.case = TRUE),
+              published_date, as.Date(NA))
+    )
+  ) |>
+  filter(!is.na(reference_date)) |>
+  distinct(reference_date, value, .keep_all = TRUE) |>
+  mutate(per_100k = 1e5 * value / sum(camp_pop_all$t_tl))
+
+camps_tl <- sum(camp_pop_all$t_tl[!grepl("Bhasan", camp_pop_all$location)])
+coxs_cum <- dist_daily |>
+  filter(district == "Cox's Bazar") |>
+  arrange(date) |>
+  mutate(cum = cumsum(suspected)) |>
+  filter(date >= first_daily) |>
+  transmute(date,
+            `Cox's Bazar, census population` = 1e5 * cum / coxs_pop,
+            `Cox's Bazar, census plus camps` = 1e5 * cum / (coxs_pop + camps_tl)) |>
+  pivot_longer(-date, names_to = "series", values_to = "per_100k")
+
+p <- ggplot() +
+  geom_line(data = coxs_cum, aes(date, per_100k, linetype = series),
+            colour = col_reference) +
+  geom_point(data = camp_cumulative,
+             aes(reference_date, per_100k,
+                 text = paste0(value, " suspected; ", doc_id)),
+             colour = col_highlight, size = 2.5) +
+  scale_x_date(date_labels = "%b") +
+  labs(x = NULL, y = "Cumulative suspected cases per 100,000",
+       linetype = NULL)
+ggplotly(p, tooltip = c("x", "y", "text"))
 ```
 
 ```{r}
