@@ -17,7 +17,7 @@ Read first (in `sandbox/`, gitignored; planning notes kept private): `sandbox/fi
 ## Hard rules
 
 - Never commit, print in full, or copy out of `assets/local/`. It holds WHO/MoH material (data dictionary, case investigation form, later the line list). The repo is public.
-- Never commit extracted DGHS figures (`data/dghs-*.csv`, `sitrep/data/dghs-*.csv`) until publication terms are agreed. Manifests with source URLs and hashes are fine.
+- Never commit extracted DGHS figures (`data/dghs-*.csv`, `sitrep/data/dghs-*.csv`) until publication terms are agreed. Manifests with source URLs and hashes are fine. Exception, agreed 2 October 2026: the rendered `report/describe.qmd` is published on GitHub Pages (`gh-pages` branch, via `quarto publish gh-pages`); its figures and tables show DGHS counts, the CSVs stay uncommitted.
 - Never commit `data/covariates/dhs_division.csv` or `wuenic_national.csv` until their licences are checked, or `data/who-monthly.csv` (CC BY-NC-SA 3.0 IGO).
 - Commit locally with conventional commits; never push without being asked.
 - No language model reads numbers from source documents. Extraction is by script from the PDF text layer. An LLM may propose, a person confirms.
