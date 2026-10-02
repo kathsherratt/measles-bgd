@@ -68,7 +68,17 @@ data/raw/
 data/covariates/dhs_division.csv
 data/covariates/wuenic_national.csv
 
+# Vaccination microdata, downloaded with registration with a no-onward-sharing policy
+data/microdata/
+
 # Private working notes, including the prompt log
 local/
 .claude/settings.local.json
 data/who-monthly.csv
+
+# Rendered reports embed DGHS and WHO figures; render locally from the .qmd
+*.html
+*_files/
+
+# Editor workspace
+*.code-workspace
