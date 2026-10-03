@@ -36,7 +36,9 @@ a Saturday; weeks consecutive.
 
 Output: data/camps-ewars-weekly.csv, one row per week, with the pixel
 height, the gridline reading before rounding and the bar's coordinates for
-checking.
+checking. `confirmed_by` and `review_note` come from the `ewars-series` row
+of data/camps-review.csv, the person's check of the whole series against
+the chart.
 
 Usage:
     python3 R/data/07-digitise-ewars-chart.py
@@ -54,6 +56,7 @@ import pymupdf
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PDF = ROOT / "data" / "pdf" / "context" / "rohingya_ewars" / "W36-2026.pdf"
 OUT = ROOT / "data" / "camps-ewars-weekly.csv"
+REVIEW = ROOT / "data" / "camps-review.csv"
 PAGE = 20
 SERIES = "Total suspected measles/rubella cases - Cox's Bazar"
 BAR_FILL = (0.231, 0.451, 0.886)
@@ -201,6 +204,14 @@ for i, (r, c, v, h, g) in enumerate(zip(bars, centres, counts, pixels,
         "bar_x": f"{c:.2f}", "bar_top": f"{r.y0:.2f}",
         "bar_bottom": f"{r.y1:.2f}", "date_offset_days": f"{offset:.2f}",
         "confirmed_by": "", "review_note": ""})
+
+# The person's check of the series, if made
+with open(REVIEW, newline="") as f:
+    review = {r["key"]: r for r in csv.DictReader(f)}.get("ewars-series")
+if review and review["decision"] == "confirmed":
+    for r in rows:
+        r["confirmed_by"] = review["reviewed_by"]
+        r["review_note"] = review["note"]
 
 # Weeks are consecutive
 ends = [dt.date.fromisoformat(r["week_end"]) for r in rows]

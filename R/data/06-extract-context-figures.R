@@ -79,6 +79,12 @@
 #' reviewer's note, e.g. the case base ("lab-confirmed cases") or whether a
 #' count is cumulative.
 #'
+#' Review decisions come from data/camps-review.csv (key, decision,
+#' reviewed_by, reviewed_at, note), exported from the camp extract review
+#' page and applied on every run, keyed on `id`: confirmed sets
+#' `confirmed_by` and `review_note`; unsure sets `review_note` only;
+#' rejected drops the row to camps-proposals-rejected.csv.
+#'
 #' Usage:
 #'     Rscript R/data/06-extract-context-figures.R
 #'
@@ -110,6 +116,7 @@ OUT_CAMPS <- here::here("data", "camps-measles.csv")
 PROPOSALS <- here::here("data", "camps-proposals.csv")
 OUT_EVENTS <- here::here("data", "camps-events.csv")
 OUT_REJECTED <- here::here("data", "camps-proposals-rejected.csv")
+REVIEW <- here::here("data", "camps-review.csv")
 
 FIGURE_SOURCES <- c("who_don", "who_searo", "un_rco", "unicef")
 CAMP_SOURCES <- c("rohingya_health", "who_searo", "un_rco")
@@ -530,6 +537,31 @@ merge_confirmed <- function(new, path) {
            page = as.integer(page))
 }
 
+# Decisions from the review page. Rows the reviewer rejected are returned
+# as an attribute, for the rejected file.
+apply_review <- function(x, review) {
+  r <- review |>
+    filter(key %in% x$id) |>
+    mutate(note = na_if(note, ""))
+  out <- x |>
+    left_join(r, by = c("id" = "key")) |>
+    mutate(
+      confirmed_by = if_else(decision %in% "confirmed", reviewed_by,
+                             confirmed_by),
+      review_note = case_when(
+        decision %in% "confirmed" ~ coalesce(note, review_note),
+        decision %in% "unsure" ~ paste0("unsure", if_else(
+          is.na(note), "", paste0(": ", note))),
+        TRUE ~ review_note
+      )
+    )
+  kept <- out |>
+    filter(!decision %in% "rejected") |>
+    select(all_of(names(x)))
+  attr(kept, "rejected") <- out |> filter(decision %in% "rejected")
+  kept
+}
+
 # ----------------------------------------------------------- proposals ----
 
 # First number in a token as written: digits with thousands commas and
@@ -722,6 +754,19 @@ camps <- bind_rows(camps, select(prop_figures, -value_text),
 
 events <- merge_confirmed(proposed_events(accepted), OUT_EVENTS)
 
+review <- read_csv(REVIEW, col_types = cols(.default = col_character()),
+                   show_col_types = FALSE)
+camps <- apply_review(camps, review)
+events <- apply_review(events, review)
+reviewed_out <- bind_rows(
+  attr(camps, "rejected") |> mutate(table = if_else(
+    quote_type %in% "needs_manual", "needs_manual", "figure")),
+  attr(events, "rejected") |> mutate(table = "event")
+) |>
+  transmute(doc_id, page = as.integer(page), table, indicator, event,
+            quote = coalesce(quote, proposal_note),
+            reason = paste("rejected on review", reviewed_at))
+
 rejected <- bind_rows(
   checked |> filter(!is.na(reason)),
   checked |>
@@ -731,7 +776,8 @@ rejected <- bind_rows(
     mutate(reason = paste("already extracted as", seen_id))
 ) |>
   select(doc_id, page, table, indicator, event, value_text, date_text,
-         quote, reason)
+         quote, reason) |>
+  bind_rows(reviewed_out)
 
 write_out(figures, OUT_FIGURES)
 write_out(camps, OUT_CAMPS)
