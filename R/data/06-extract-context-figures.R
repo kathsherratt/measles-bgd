@@ -12,12 +12,22 @@
 #' the quote against the source page. Patterns were designed by reading the
 #' text; they carry no figures.
 #'
-#' Two outputs:
+#' A second route raises recall for the camps. A language model reads the
+#' text layer and proposes quotes in data/camps-proposals.csv; it is never
+#' the source of a number or date. A proposal is kept only if its quote is a
+#' span of that page's text (whitespace squished, no other tidying) and its
+#' `value_text` or `date_text` occurs once in the quote. The value or date is
+#' then parsed here from that token. Kept rows have `quote_type = "proposed"`;
+#' the rest go to data/camps-proposals-rejected.csv with a reason.
+#'
+#' Outputs:
 #'   data/context-figures.csv  national and division-level measles cases by
 #'                             age, sex and vaccination status (who_don,
 #'                             who_searo, un_rco, unicef)
-#'   data/camps-measles.csv    Rohingya camp measles counts (rohingya_health,
-#'                             who_searo, un_rco)
+#'   data/camps-measles.csv    Rohingya camp measles figures (rohingya_health,
+#'                             who_searo, un_rco; and proposals)
+#'   data/camps-events.csv     camp response events, from proposals only
+#'   data/camps-proposals-rejected.csv  proposals that failed the gate
 #'
 #' Columns: id (hash of doc_id, page, quote and indicator), source, doc_id,
 #' published_date, page, indicator, value, unit, denominator (a case or child
@@ -37,17 +47,37 @@
 #'   cases_undervaccinated_pct, cases_partially_vaccinated_pct,
 #'   cases_one_dose_pct, cases_two_dose_pct, cases_unknown_vacc_pct
 #'
-#' Indicator vocabulary, camps-measles.csv (unit count):
+#' Indicator vocabulary, camps-measles.csv (unit count unless stated):
 #'   camp_suspected_cases, camp_confirmed_cases, camp_epilinked_cases,
 #'   camp_total_cases (outbreak-related, confirmed plus epi-linked),
 #'   camp_deaths, camp_admissions
-#'   Cumulative or period is not an indicator; read it from period_text.
+#'   From proposals also: camp_lab_results, camp_outbreaks,
+#'   camp_outbreaks_new, camp_rubella_confirmed, camp_cfr_pct,
+#'   camp_incidence_annualised_per_million, camp_cases_age_<band>_pct,
+#'   camp_isolation_beds, camp_sari_itc_count, camp_campaign_target,
+#'   camp_campaign_vaccinated, camp_campaign_coverage_pct,
+#'   camp_campaign_vitamin_a, camp_rcm_coverage_pct,
+#'   camp_rcm_children_eligible, camp_routine_mr_doses, camp_chw_mobilised,
+#'   host_campaign_vaccinated. Unit from the suffix (_pct, _per_million).
+#'   Cumulative or period is not an indicator: `period` (cumulative, month,
+#'   week, point) is proposed, and `as_of_date` is parsed from period_text.
+#'
+#' Event vocabulary, camps-events.csv: campaign_round, facility_opened,
+#' isolation_beds, isolation_facility_designated, surveillance_change,
+#' coordination, other. `event_date` is parsed from `date_text`, with
+#' `date_precision` day or month; no date in the quote leaves it empty.
+#'
+#' camps-measles.csv adds `period`, `as_of_date` and `proposal_note` (the
+#' proposer's note, kept apart from the reviewer's). Content that exists
+#' only in charts or maps is listed as `quote_type = "needs_manual"`, with
+#' no value, for a person to enter by hand.
 #'
 #' Re-running merges on `id`: rows with `confirmed_by` or `review_note`
 #' filled, and hand-entered rows (`quote_type = "manual"`, entered by a
 #' person where the text layer is garbled), are kept as they are; other
-#' rows are regenerated. `review_note` holds the reviewer's note, e.g. the
-#' case base ("lab-confirmed cases") or whether a count is cumulative.
+#' rows, proposals included, are regenerated. `review_note` holds the
+#' reviewer's note, e.g. the case base ("lab-confirmed cases") or whether a
+#' count is cumulative.
 #'
 #' Usage:
 #'     Rscript R/data/06-extract-context-figures.R
@@ -77,6 +107,9 @@ suppressMessages({
 MANIFEST <- here::here("data", "manifest-context.csv")
 OUT_FIGURES <- here::here("data", "context-figures.csv")
 OUT_CAMPS <- here::here("data", "camps-measles.csv")
+PROPOSALS <- here::here("data", "camps-proposals.csv")
+OUT_EVENTS <- here::here("data", "camps-events.csv")
+OUT_REJECTED <- here::here("data", "camps-proposals-rejected.csv")
 
 FIGURE_SOURCES <- c("who_don", "who_searo", "un_rco", "unicef")
 CAMP_SOURCES <- c("rohingya_health", "who_searo", "un_rco")
@@ -493,8 +526,153 @@ merge_confirmed <- function(new, path) {
   new_cols <- new |>
     mutate(across(everything(), as.character))
   bind_rows(old, new_cols |> filter(!id %in% old$id)) |>
-    mutate(value = as.numeric(value), denominator = as.numeric(denominator),
+    mutate(across(any_of(c("value", "denominator")), as.numeric),
            page = as.integer(page))
+}
+
+# ----------------------------------------------------------- proposals ----
+
+# First number in a token as written: digits with thousands commas and
+# decimals, or a word ("Twelve newly", "two (2) related", "CFR-0.6%").
+FIRST_NUM <- paste0("\\d+(?:,\\d{3})*(?:\\.\\d+)?|\\b(?:",
+                    paste(names(WORDS), collapse = "|"), ")\\b")
+first_number <- function(x) parse_num(str_extract(x, re(FIRST_NUM)))
+
+# First date in a phrase: "26 April", "10 & 11 May", "April 26", "1 August
+# 2026", or a month alone ("July 2026", "As of July"). Year defaults to 2026.
+parse_date <- function(x) {
+  none <- list(date = as.Date(NA), precision = NA_character_)
+  if (is.na(x) || !nzchar(x)) return(none)
+  ymd_or_na <- function(y, m, d) {
+    as.Date(sprintf("%s-%02d-%02d", coalesce(y, "2026"),
+                    match(str_to_title(m), month.name), as.integer(d)))
+  }
+  m <- str_match(x, re(paste0(
+    "(\\d{1,2})(?:st|nd|rd|th)?(?:\\s?(?:&|and|-|–|to)\\s?\\d{1,2})?\\s(",
+    MONTH, ")(?:,?\\s(\\d{4}))?")))
+  if (!is.na(m[1, 1])) {
+    return(list(date = ymd_or_na(m[1, 4], m[1, 3], m[1, 2]),
+                precision = "day"))
+  }
+  m <- str_match(x, re(paste0("(", MONTH, ")\\s(\\d{1,2})\\b(?:,?\\s(\\d{4}))?")))
+  if (!is.na(m[1, 1])) {
+    return(list(date = ymd_or_na(m[1, 4], m[1, 2], m[1, 3]),
+                precision = "day"))
+  }
+  m <- str_match(x, re(paste0("(", MONTH, ")(?:\\s(\\d{4}))?")))
+  if (!is.na(m[1, 1])) {
+    return(list(date = ymd_or_na(m[1, 3], m[1, 2], 1), precision = "month"))
+  }
+  none
+}
+
+# The date a figure refers to: the day given, or the end of a month given
+# alone ("In May 2026", "As of July"). Weeks ("EW 18") are left empty.
+as_of_date <- function(period_text) {
+  map(period_text, parse_date) |>
+    map_chr(\(d) {
+      if (is.na(d$date)) return(NA_character_)
+      if (d$precision == "month") {
+        d$date <- seq(d$date, by = "month", length.out = 2)[2] - 1
+      }
+      format(d$date)
+    })
+}
+
+page_texts <- function(path) {
+  full <- here::here(path)
+  pages <- if (str_detect(path, "\\.pdf$")) {
+    tryCatch(pdftools::pdf_text(full), error = \(e) character())
+  } else {
+    paste(readLines(full, warn = FALSE), collapse = "\n")
+  }
+  str_squish(pages)
+}
+
+# The gate. A proposal is kept only if its quote is a span of the page text
+# and its token occurs once in the quote; there is no exemption route.
+check_proposals <- function(path) {
+  p <- read_csv(path, col_types = cols(.default = col_character()),
+                show_col_types = FALSE) |>
+    mutate(page = as.integer(page),
+           across(c(value_text, date_text, period_text), \(x) na_if(x, "")))
+  texts <- manifest |>
+    filter(doc_id %in% p$doc_id) |>
+    mutate(pages = map(path, page_texts)) |>
+    select(source, doc_id, published_date, pages)
+  p |>
+    left_join(texts, by = "doc_id") |>
+    mutate(
+      quote = str_squish(quote),
+      page_text = map2_chr(pages, page, \(x, i) {
+        if (is.null(x) || i > length(x)) NA_character_ else x[[i]]
+      }),
+      token = coalesce(value_text, date_text),
+      value = if_else(table == "figure", first_number(value_text), NA_real_),
+      reason = case_when(
+        table == "needs_manual" ~ NA_character_,
+        is.na(source) ~ "document not in manifest",
+        is.na(page_text) ~ "page not in document",
+        !str_detect(page_text, fixed(quote)) ~
+          "quote is not a span of the page text",
+        table == "figure" & is.na(value_text) ~ "no value_text",
+        !is.na(token) & str_count(quote, fixed(token)) != 1 ~
+          "token does not occur exactly once in the quote",
+        !is.na(period_text) & !str_detect(quote, fixed(period_text)) ~
+          "period_text not in the quote",
+        table == "figure" & is.na(value) ~ "no number in value_text",
+        TRUE ~ NA_character_
+      )
+    ) |>
+    select(-pages)
+}
+
+# Figures from accepted proposals, in the camps-measles.csv layout. The id
+# adds value_text, since one quote can carry several figures.
+proposed_figures <- function(p) {
+  p |>
+    filter(table == "figure") |>
+    transmute(
+      id = map_chr(paste(doc_id, page, quote, indicator, value_text),
+                   rlang::hash) |> str_sub(1, 12),
+      source, doc_id, published_date, page, indicator, value,
+      unit = case_when(str_detect(indicator, "_pct$") ~ "pct",
+                       str_detect(indicator, "_per_million$") ~ "per_million",
+                       TRUE ~ "count"),
+      denominator = NA_real_, geography = place_raw, period_text, quote,
+      quote_type = "proposed", confirmed_by = NA_character_,
+      review_note = NA_character_, period = na_if(period, ""),
+      proposal_note = na_if(note, ""), value_text
+    )
+}
+
+needs_manual <- function(p) {
+  p |>
+    filter(table == "needs_manual") |>
+    transmute(
+      id = map_chr(paste(doc_id, page, quote), rlang::hash) |> str_sub(1, 12),
+      source, doc_id, published_date, page, indicator = NA_character_,
+      value = NA_real_, unit = NA_character_, geography = place_raw,
+      # The panel to read, before `quote` is emptied: it is not a quote
+      proposal_note = paste0(quote, ". ", note),
+      quote = NA_character_, quote_type = "needs_manual"
+    )
+}
+
+proposed_events <- function(p) {
+  p |>
+    filter(table == "event") |>
+    mutate(parsed = map(date_text, parse_date)) |>
+    transmute(
+      id = map_chr(paste(doc_id, page, quote, event, date_text, facility_raw),
+                   rlang::hash) |> str_sub(1, 12),
+      source, doc_id, published_date, page, event,
+      event_date = map_chr(parsed, \(d) format(d$date)) |> na_if("NA"),
+      date_precision = map_chr(parsed, "precision"),
+      date_text, place_raw, facility_raw = na_if(facility_raw, ""), quote,
+      quote_type = "proposed", proposal_note = na_if(note, ""),
+      confirmed_by = NA_character_, review_note = NA_character_
+    )
 }
 
 write_out <- function(x, path) {
@@ -519,8 +697,46 @@ camps <- run(CAMP_SOURCES, "camps") |> finish()
 
 figures <- merge_confirmed(figures, OUT_FIGURES)
 camps <- merge_confirmed(camps, OUT_CAMPS)
+
+# Proposals: a kept (confirmed) version of a proposal is already in `camps`
+# by id; any other proposal giving a figure the regex already found is not
+# added twice.
+checked <- check_proposals(PROPOSALS)
+accepted <- checked |> filter(is.na(reason))
+stopifnot(
+  all(str_detect(accepted$page_text[accepted$table != "needs_manual"],
+                 fixed(accepted$quote[accepted$table != "needs_manual"]))),
+  !anyNA(accepted$value[accepted$table == "figure"])
+)
+prop_figures <- proposed_figures(accepted) |>
+  filter(!id %in% camps$id)
+seen <- camps |>
+  transmute(key = paste(doc_id, page, indicator, value), seen_id = id)
+dupes <- prop_figures |>
+  mutate(key = paste(doc_id, page, indicator, value)) |>
+  inner_join(seen, by = "key", multiple = "first")
+prop_figures <- prop_figures |> filter(!id %in% dupes$id)
+camps <- bind_rows(camps, select(prop_figures, -value_text),
+                   needs_manual(accepted) |> filter(!id %in% camps$id)) |>
+  mutate(as_of_date = as_of_date(period_text))
+
+events <- merge_confirmed(proposed_events(accepted), OUT_EVENTS)
+
+rejected <- bind_rows(
+  checked |> filter(!is.na(reason)),
+  checked |>
+    semi_join(dupes, by = c("doc_id", "page", "indicator", "value_text")) |>
+    left_join(select(dupes, doc_id, page, indicator, value_text, seen_id),
+              by = c("doc_id", "page", "indicator", "value_text")) |>
+    mutate(reason = paste("already extracted as", seen_id))
+) |>
+  select(doc_id, page, table, indicator, event, value_text, date_text,
+         quote, reason)
+
 write_out(figures, OUT_FIGURES)
 write_out(camps, OUT_CAMPS)
+write_out(events, OUT_EVENTS)
+write_csv(rejected, OUT_REJECTED, na = "")
 
 message("Candidates by source and indicator")
 for (x in list(c("context-figures.csv", "figures"),
@@ -529,3 +745,17 @@ for (x in list(c("context-figures.csv", "figures"),
   message("\n", x[[1]], ": ", nrow(d), " rows")
   print(count(d, source, indicator), n = Inf)
 }
+message("\nProposals by document: added, already extracted, rejected, ",
+        "needing manual entry")
+checked |>
+  mutate(outcome = case_when(
+    table == "needs_manual" ~ "needs_manual",
+    !is.na(reason) ~ "rejected",
+    paste(doc_id, page, indicator, value_text) %in%
+      paste(dupes$doc_id, dupes$page, dupes$indicator, dupes$value_text) ~
+      "already_extracted",
+    TRUE ~ "added"
+  )) |>
+  count(doc_id, outcome) |>
+  pivot_wider(names_from = outcome, values_from = n, values_fill = 0) |>
+  print(n = Inf)
