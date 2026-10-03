@@ -18,6 +18,6 @@ The DGHS PDFs' text layer is garbled by a legacy font encoding, and Claude does 
 
 ## Hard rules
 
-- No language model reads numbers from the PDFs. Extraction is by script from the text layer. An LLM may propose, a person confirms.
+- No language model is the source of a number or date taken from the PDFs. Extraction is by script from the text layer. An LLM may locate a passage and propose its verbatim quote; the script keeps the quote only if it is a span of the text layer, and parses the value or date from it. A person confirms.
 - Never commit `sitrep/data/dghs-*.csv`, `sitrep/data/pdf/` or `sitrep/data/quarantine/`. `sitrep/data/manifest-dghs.csv` (source URLs and hashes) is tracked.
 - Never edit a script while a detached `Rscript` is running it.

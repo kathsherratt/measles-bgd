@@ -20,7 +20,7 @@ Read first (in `sandbox/`, gitignored; planning notes kept private): `sandbox/fi
 - Never commit extracted DGHS figures (`data/dghs-*.csv`, `sitrep/data/dghs-*.csv`) until publication terms are agreed. Manifests with source URLs and hashes are fine. Exception, agreed 2 October 2026: the rendered `report/describe.qmd` is published on GitHub Pages (`gh-pages` branch, via `quarto publish gh-pages`); its figures and tables show DGHS counts, the CSVs stay uncommitted.
 - Never commit `data/covariates/dhs_division.csv` or `wuenic_national.csv` until their licences are checked, or `data/who-monthly.csv` (CC BY-NC-SA 3.0 IGO).
 - Commit locally with conventional commits; never push without being asked.
-- No language model reads numbers from source documents. Extraction is by script from the PDF text layer. An LLM may propose, a person confirms.
+- No language model is the source of a number or date taken from a source document. Extraction is by script from the PDF text layer. An LLM may locate a passage and propose its verbatim quote; the script keeps the quote only if it is a span of the text layer, and parses the value or date from it. A person confirms.
 - `local/` is private: `local/prompt-log.md` (prompts appended by a hook in `.claude/settings.local.json`), call notes (they name individuals), and exploratory scripts in `local/scratch/`.
 
 ## Pipeline
