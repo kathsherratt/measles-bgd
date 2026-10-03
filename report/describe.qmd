@@ -466,13 +466,92 @@ Not yet in the data: dates of the May round and the September mop-up, and covera
 
 ## Rohingya population
 
-TBC pending clarification and data extraction from humanitarian reporting
+```{r}
+#| label: inputs-camps
+
+# EWARS weekly suspected measles/rubella in the camps, digitised from the
+# W36 2026 bulletin chart; confirmed as a series (data/camps-review.csv)
+ewars <- read.csv(here("data", "camps-ewars-weekly.csv")) |>
+  filter(confirmed_by != "") |>
+  transmute(week = ymd(week_start), ewars = value)
+# DGHS admissions reported by facilities in Cox's Bazar district
+coxs_weekly <- dist_daily |>
+  filter(district == "Cox's Bazar") |>
+  weekly() |>
+  select(week, dghs = suspected)
+camps_weekly <- full_join(ewars, coxs_weekly, by = "week") |>
+  arrange(week)
+
+# Camp case and death figures from situation reports and bulletins,
+# confirmed against the source page
+camps_figures <- read.csv(here("data", "camps-measles.csv"),
+                          na.strings = "") |>
+  filter(!is.na(confirmed_by),
+         indicator %in% c("camp_suspected_cases", "camp_confirmed_cases",
+                          "camp_epilinked_cases", "camp_total_cases",
+                          "camp_deaths", "camp_admissions")) |>
+  mutate(date = ymd(coalesce(as_of_date, published_date)))
+```
 
 ```{r}
-#| label: inputs-among-whom
+#| label: fig-epicurve-camps
+#| fig-cap: >-
+#|   Suspected measles/rubella cases per epidemiological week in the Rohingya camps (bars), and suspected measles admissions reported by facilities in Cox's Bazar district (line), 22 December 2024 to 12 September 2026.
+#|   Camp counts are syndromic reports from camp health facilities, not hospital admissions; the two series are not comparable in kind.
+#|   Whether camp cases are included in Cox's Bazar district's DGHS count is not known.
+#|   Dotted line: camp MR campaign (26 April).
+#|   Sources: Rohingya Response EWARS bulletin W36 2026 (Figure 4, digitised); DGHS measles monitoring platform, report date.
+#| fig-alt: "Weekly bar chart of suspected measles cases in the Rohingya camps from late 2024, with a line of weekly suspected admissions in Cox's Bazar district from April 2026 and a dotted line at the camp campaign."
 
-# TODO properly review reports from rohingya population to identify outbreak events in a consistent dataframe
+p <- camps_weekly |>
+  mutate(text = paste0(week_label(week), ": ",
+                       if_else(is.na(ewars), "", paste0(fmt(ewars), " camps")),
+                       if_else(is.na(dghs), "",
+                               paste0("; ", fmt(dghs), " Cox's Bazar (DGHS)")))) |>
+  ggplot(aes(week + 3.5)) +
+  geom_col(aes(y = ewars, fill = "Camps (EWARS)", text = text), width = 7,
+           na.rm = TRUE) +
+  geom_line(aes(y = dghs, colour = "Cox's Bazar district (DGHS)"),
+            na.rm = TRUE) +
+  geom_point(aes(y = dghs, colour = "Cox's Bazar district (DGHS)",
+                 text = text), size = 1, na.rm = TRUE) +
+  geom_vline(data = filter(events, scope == "camps"),
+             aes(xintercept = date), colour = col_primary,
+             linetype = "dotted") +
+  scale_fill_manual(values = c("Camps (EWARS)" = col_reference)) +
+  scale_colour_manual(values = c("Cox's Bazar district (DGHS)" =
+                                   col_highlight)) +
+  scale_x_date(date_labels = "%b %Y") +
+  labs(x = "Week (Sunday to Saturday)", y = "Suspected cases per week",
+       fill = NULL, colour = NULL)
+ggplotly(p, tooltip = "text")
 ```
+
+<!-- TODO KS: one sentence stating the pattern -->
+
+::: {.callout-tip collapse="true"}
+# Camp case and death figures in situation reports
+
+```{r}
+#| label: tbl-camps-figures
+#| tbl-cap: >-
+#|   Camp measles case and death figures as stated in situation reports and bulletins, each confirmed against its source page.
+#|   Geography, period and case base differ between documents and are given as stated.
+#|   Sources: Health Sector Cox's Bazar bulletins; UN RCO, UNICEF and WHO SEARO reports.
+
+camps_figures |>
+  arrange(indicator, date) |>
+  transmute(
+    measure = sub("^camp_", "", indicator) |> gsub(pattern = "_", replacement = " "),
+    value = fmt(value),
+    date = if_else(is.na(date), "", format(date, "%e %b")),
+    geography, period = coalesce(period_text, period, ""),
+    source = doc_id, note = coalesce(gsub("\n", " ", review_note), "")
+  ) |>
+  kable(col.names = c("Measure", "Value", "As of or published", "Geography",
+                      "Period", "Document", "Reviewer note"))
+```
+:::
 
 --------------------------------------------------------------------------------
 
