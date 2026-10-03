@@ -58,3 +58,9 @@ Not found in a source that was actually read:
 - The Lessler median CI upper bound is 13.2 in the text and 13.3 in Table 3. The text value is recorded.
 - R0 IQR values from Fu 2026 appear to be widths, not bounds, and are noted rather than entered as limits.
 - Preprint rows (Pervez, Goutam, Kamrujjaman) are not peer reviewed.
+
+## Screening the Measles Analytics Hub directory
+
+`needs.csv` lists each model input with the step that uses it, how sensitive outputs are to it, the register rows that cover it, the gap, and a regular expression of search terms. It drives screening, so new sources are searched for what the models need rather than for what earlier searches happened to find.
+
+`R/parameters/01-screen-directory.R` screens the directory export (`measles-analytics-directory.csv`, gitignored until reuse terms are checked; hash in `manifest-directory.csv`) without a language model: it drops theoretical model-analysis papers, matches the remaining titles, abstracts and keywords against `needs.csv`, and writes `directory-screen.csv` (one row per paper, no abstracts) and the counts at each step to `search-log.csv`. A match is a candidate for abstract screening, not an inclusion.

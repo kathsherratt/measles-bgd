@@ -1,0 +1,5 @@
+run_date,source,step,rule,n_in,n_out
+2026-10-03,"Measles Analytics Hub directory, export 2026-10-03",export,"all themes, all years",422,422
+2026-10-03,"Measles Analytics Hub directory, export 2026-10-03",deduplicate,"same DOI, or same title where DOI is blank",422,419
+2026-10-03,"Measles Analytics Hub directory, export 2026-10-03",drop theoretical,theme Theoretical modelling or model-analysis terms,419,304
+2026-10-03,"Measles Analytics Hub directory, export 2026-10-03",match a need,"title, abstract or keywords match a needs.csv pattern",304,206

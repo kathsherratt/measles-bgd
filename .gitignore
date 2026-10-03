@@ -84,3 +84,5 @@ data/who-monthly.csv
 *.code-workspace
 
 sandbox/
+# Measles Analytics Hub directory export: reuse terms not yet checked
+data/parameters/measles-analytics-directory.csv
