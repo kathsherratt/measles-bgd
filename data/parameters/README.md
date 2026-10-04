@@ -4,16 +4,18 @@ A small literature-sourced register of measles parameters for the analysis of th
 
 ## Status: unreviewed
 
-Rows P01 to P50 were extracted by an LLM (`extracted_by = "LLM, unreviewed"`), many from abstracts only (flagged in `parameter_notes`, quality C); rows marked "computed" were derived by the extractor from counts in the source.
+Rows P02 to P50 were extracted by an LLM (`extracted_by = "LLM, unreviewed"`), many from abstracts only (flagged in `parameter_notes`, quality C); rows marked "computed" were derived by the extractor from counts in the source. P01 (Lessler's incubation median) has been replaced by a quote-checked row.
 
-Rows from P51 on go through a quote check: an LLM locates the passage and proposes a row in `proposals.csv` with the verbatim `quote` and `value_text` (the part holding the number); `R/parameters/02-check-proposals.py` keeps the row only if the quote is a span of the PDF page's text layer and `value_text` occurs once in it on number boundaries, then parses the value and bounds from `value_text` (`extracted_by = "LLM-located quote; value parsed by script; unreviewed"`). Failures go to `proposals-rejected.csv`. Every row still needs a person's check before use.
+Rows from P51 on go through a quote check: an LLM locates the passage and proposes a row in `proposals.csv` with the verbatim `quote` and `value_text` (the part holding the number); `R/parameters/02-check-proposals.py` keeps the row only if the quote is a span of the PDF page's text layer and `value_text` occurs once in it on number boundaries, then parses the value and bounds from `value_text`. For a row of a binned table, `bin_text` (e.g. "0-3d") must sit immediately before `value_text` in the quote (`extracted_by = "LLM-located quote; value parsed by script; unreviewed"`). Failures go to `proposals-rejected.csv`. The check covers the value and its bounds only: `population_sample_size` and the age fields are still typed in the proposal, and are not checked against the quote. Every row still needs a person's check before use.
 
 ## Files
 
 - `measles_parameters.csv`: one row per parameter estimate.
 - `measles_articles.csv`: one row per source, with DOI, study type and what was and was not read, and `pdf_key`, the Zotero storage key of the PDF used for quote checks. Six sources were opened but yielded no extractable value (A06, A07, A24, A27, A28, A29); they are listed so the gap is visible.
 - `proposals.csv`, `proposals-rejected.csv`: proposed rows with quotes, and those that failed the check.
-- `priors.csv`: model priors built by `R/parameters/03-build-priors.R` from checked register rows only; each names its rows and derivation. `status = "draft"` until a person fills `reviewed_by`.
+- `delay-fits.csv`: distributions fitted by `R/parameters/04-fit-delays.R` to binned delays in the register (Domai 2022), with observed and expected bin counts, and infection to admission by simulation.
+- `assumptions.csv`: quantities with no source, stated with a rationale (S01, admission to DGHS report), so no script types a number.
+- `priors.csv`: model priors built by `R/parameters/03-build-priors.R` from checked register rows, delay fits and assumptions only; each names its sources (`register_rows`, which may hold an assumption id) and derivation, the natural-scale mean and SD, and the family's own parameters (`par1`, `par2`). `status = "draft"` until a person fills `reviewed_by`.
 
 ## Schema
 
@@ -28,13 +30,14 @@ Three columns are ours and not in epireview:
 | `source_location` | Where the number appears (abstract, table, text section) |
 | `quality_flag` | A: systematic review, meta-analysis or large well-described study. B: single study, adequate methods. C: weak, old, indirect, abstract-only without full uncertainty, or preprint |
 | `extracted_by` | How the value was obtained (see Status) |
-| `quote`, `value_text`, `pdf_page` | The checked passage, the part of it holding the number, and the PDF page (rows from P51) |
+| `quote`, `value_text`, `pdf_page` | The checked passage, the part of it holding the number, and the PDF page (rows from P51, and P01) |
+| `bin_text` | The bin label of a binned count, as printed (e.g. "0-3d", ">14d"); `parameter_value_type` is "Count in bin" |
 | `via_article_id` | The source a value was taken from when the paper cited is not the one that estimated it (for example Marye 2026 using a value from Vink 2014) |
 
 Conventions:
 
 - `parameter_type` uses epireview's `parameter_type_full` vocabulary where a match exists (`inst/extdata/param_name.csv`): "Human delay - Exposure/Infection to Symptom Onset/Fever", "Human delay - generation time", "Human delay - serial interval", "Human delay - Symptom Onset/Fever to Death", "Severity - case fatality rate (CFR)", "Reproduction number (Basic R0)", "Risk factors".
-- Labels marked "(provisional)" (admission to discharge, proportion of suspected cases confirmed, age of cases) have no epireview equivalent yet.
+- Labels marked "(provisional)" (admission to discharge, rash onset to admission, symptom onset to seeking care, proportion of confirmed cases hospitalised, proportion of suspected cases confirmed, age of cases) have no epireview equivalent yet. Fever onset to admission uses epireview's "Human delay - Symptom Onset/Fever to Admission to Care/Hospitalisation".
 - Types with no epireview equivalent, used as provisional labels: "Vaccine effectiveness" (and "Vaccine effectiveness (relative)", "Vaccine effectiveness (mortality)"), "Seroconversion after MCV1", "Seroprevalence (maternal antibody)", "Duration of maternal immunity", "Treatment effect - vitamin A (mortality)". These would need agreeing with epireview maintainers.
 - Ages are in years. `population_age_max` is blank where open-ended.
 - Percentages are stored as numbers (3.2 means 3.2%). Relative measures (RR, OR) are unitless ratios.

@@ -1,0 +1,6 @@
+quantity,register_rows,bins,n,preferred,dist,par1_name,par1,par2_name,par2,mean,sd,median,q95,loglik,aic,observed,expected
+Fever onset to admission,P66; P67; P68; P69,0-3d; 4-6d; 7-14d; >14d,5528,TRUE,lognormal,meanlog,1.387,sdlog,0.446,4.423,2.073,4.005,8.336,-5576.4,11156.9,2071; 2746; 676; 35,2103; 2650; 765; 11
+Fever onset to admission,P66; P67; P68; P69,0-3d; 4-6d; 7-14d; >14d,5528,FALSE,gamma,shape,4.443,rate,1.015,4.376,2.076,4.052,8.253,-5628.2,11260.5,2071; 2746; 676; 35,2127; 2575; 823; 3
+Rash onset to admission,P70; P71; P72; P73,0-3d; 4-6d; 7-14d; >14d,5465,TRUE,lognormal,meanlog,0.369,sdlog,0.774,1.951,1.768,1.446,5.166,-2495.5,4995,4757; 580; 112; 16,4760; 561; 136; 8
+Rash onset to admission,P70; P71; P72; P73,0-3d; 4-6d; 7-14d; >14d,5465,FALSE,gamma,shape,0.719,rate,0.451,1.595,1.881,0.943,5.377,-2509.4,5022.7,4757; 580; 112; 16,4762; 544; 156; 4
+Infection to admission (incubation + fever onset to admission),P01; P65; P66; P67; P68; P69,,,TRUE,lognormal + lognormal (simulated),,,,,17.193,3.384,16.85,23.254,,,,

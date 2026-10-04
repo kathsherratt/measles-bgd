@@ -10,11 +10,19 @@ This script keeps a proposal only if:
   - the source PDF is found (Zotero storage, by the article's `pdf_key`);
   - the quote is a span of the PDF page's text layer (whitespace squished,
     ligatures and soft hyphens undone, manuscript line numbers ignored);
-  - `value_text` occurs exactly once in the quote, and starts and ends on
-    number boundaries ("1.2" may not match inside "1.22").
+  - `value_text` occurs exactly once in the quote on number boundaries
+    ("1.2" does not count inside "1.22", nor "35" inside "0.35");
+  - for a binned row, `bin_text` (e.g. "0-3d") is immediately followed by
+    `value_text`, exactly once, so a count cannot be paired with the wrong
+    bin.
 The value is then parsed from `value_text`: the first number is the value;
 with three or more numbers, the last two are the lower and upper bounds.
 Numbers in between (a sample size, "95%" in "95% CI") are ignored.
+Numbers may carry thousands commas ("2,071") and mid-dot decimals ("12·5");
+a dash before a number is a minus sign unless a digit precedes it
+("range = –2 to 10" gives -2; "3-6" is a range).
+Bin edges stay as checked text in `bin_text`; the script that uses them
+parses them.
 
 Python, not R: pymupdf returns each page's text in reading-order blocks, so
 two-column journal pages stay readable; pdftools interleaves the columns.
@@ -23,7 +31,8 @@ Needs pymupdf (pip install pymupdf).
 Outputs:
   data/parameters/measles_parameters.csv  passing rows added or replaced by
                                           id; columns quote, value_text,
-                                          via_article_id and pdf_page added
+                                          via_article_id, pdf_page and
+                                          bin_text added
   data/parameters/proposals-rejected.csv  failing proposals with a reason
 
 PDFs are looked up under $ZOTERO_STORAGE (default ~/Zotero/storage). On a
@@ -51,13 +60,14 @@ REJECTED = PARAMS / "proposals-rejected.csv"
 STORAGE = pathlib.Path(os.environ.get("ZOTERO_STORAGE",
                                       os.path.expanduser("~/Zotero/storage")))
 EXTRACTED_BY = "LLM-located quote; value parsed by script; unreviewed"
-NEW_COLS = ["quote", "value_text", "via_article_id", "pdf_page"]
-NUMBER = re.compile(r"\d+(?:\.\d+)?")
+NEW_COLS = ["quote", "value_text", "via_article_id", "pdf_page", "bin_text"]
+NUMBER = re.compile(r"(?:(?<![\d.])[-–−](?=\d))?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
 
 
 def squish(s):
     s = s.replace("ﬁ", "fi").replace("ﬂ", "fl").replace("­", "")
     s = re.sub(r"-\n(\w)", r"\1", s)
+    s = re.sub(r"(\d)·(\d)", r"\1.\2", s)
     return re.sub(r"\s+", " ", s).strip()
 
 
@@ -74,7 +84,8 @@ def page_texts(pdf, page):
 
 
 def parse(value_text):
-    nums = [float(x) for x in NUMBER.findall(value_text)]
+    nums = [float(re.sub(r"[–−]", "-", x).replace(",", ""))
+            for x in NUMBER.findall(value_text)]
     if not nums:
         return None
     lower = upper = ""
@@ -82,6 +93,17 @@ def parse(value_text):
         lower, upper = nums[-2], nums[-1]
     fmt = lambda x: "" if x == "" else f"{x:g}"
     return fmt(nums[0]), fmt(lower), fmt(upper)
+
+
+def occurrences(quote, token):
+    """Start positions of `token` in `quote` that do not cut through a
+    number: "1.2" inside "1.22" or "35" inside "0.35" do not count."""
+    hits = []
+    for m in re.finditer(re.escape(token), quote):
+        before, after = quote[max(m.start() - 1, 0):m.start()], quote[m.end():m.end() + 2]
+        if not (re.match(r"[\d.,]", before) or re.match(r"\d|[.,]\d", after)):
+            hits.append(m.start())
+    return hits
 
 
 def check(p, pdf_keys):
@@ -93,14 +115,13 @@ def check(p, pdf_keys):
     quote = squish(p["quote"])
     if not any(quote in t for t in texts):
         return "quote is not a span of the page text", None
-    if quote.count(p["value_text"]) != 1:
-        return "value_text does not occur exactly once in the quote", None
-    # The token must not cut a number short ("1.2" inside "1.22")
-    i = quote.index(p["value_text"])
-    before, after = quote[i - 1:i], quote[i + len(p["value_text"]):][:2]
-    if re.match(r"[\d.]", before) or re.match(r"\d|\.\d", after):
-        return "value_text cuts through a number in the quote", None
-    parsed = parse(p["value_text"])
+    value_text = squish(p["value_text"])
+    if len(occurrences(quote, value_text)) != 1:
+        return "value_text does not occur exactly once on number boundaries", None
+    # A table row: the count follows its own bin label ("0-3d 2,071")
+    if p.get("bin_text") and len(occurrences(quote, squish(p["bin_text"]) + " " + value_text)) != 1:
+        return "bin_text and value_text are not adjacent exactly once", None
+    parsed = parse(value_text)
     if parsed is None:
         return "no number in value_text", None
     return None, parsed
@@ -142,8 +163,9 @@ for p in proposals:
         "parameter_notes": p["parameter_notes"],
         "source_location": f"PDF page {p['pdf_page']}",
         "quality_flag": p["quality_flag"], "extracted_by": EXTRACTED_BY,
-        "quote": squish(p["quote"]), "value_text": p["value_text"],
+        "quote": squish(p["quote"]), "value_text": squish(p["value_text"]),
         "via_article_id": p["via_article_id"], "pdf_page": p["pdf_page"],
+        "bin_text": p.get("bin_text", ""),
     })
     accepted.append(row)
 

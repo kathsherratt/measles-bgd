@@ -1,0 +1,2 @@
+assumption_id,quantity,distribution,lower,upper,unit,rationale,status,reviewed_by
+S01,Admission to DGHS report,discrete uniform,0,1,days,"The DGHS press releases count 8am to 8am, so an admission is counted on its own date or the next; the platform series is assumed to use the same window. Not verified with DGHS: no source gives the delay, and the platform publishes no reporting triangle.",draft,
