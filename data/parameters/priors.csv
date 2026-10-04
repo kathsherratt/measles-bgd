@@ -1,0 +1,7 @@
+prior_id,quantity,used_in,role,distribution,unit,mean,sd,register_rows,derivation,status,reviewed_by
+gi_central,Generation interval,Rt renewal model (first-steps step 4),central,gamma,days,11.5,1.5,P51; P52; P53; P54,"Average of the two bigamma household fits (Klinkenberg & Nishiura 2011, Table 2): means and SDs averaged, rounded to 0.1 day",draft,
+gi_mean_low,Generation interval,Rt renewal model (first-steps step 4),mean_low,gamma,days,9.9,1.5,P55; P52; P54,"Shortest serial interval mean of Vink 2014's six datasets (Kenya 1974-81), with the central SD",draft,
+gi_mean_high,Generation interval,Rt renewal model (first-steps step 4),mean_high,gamma,days,13.8,1.5,P56; P52; P54,"Longest serial interval mean of Vink 2014's six datasets (US 1934), with the central SD",draft,
+gi_sd_low,Generation interval,Rt renewal model (first-steps step 4),sd_low,gamma,days,11.5,0.7,P51; P53; P52; P54,Central mean with the lowest lower bound of Klinkenberg's 95% CrIs for the SD,draft,
+gi_sd_high,Generation interval,Rt renewal model (first-steps step 4),sd_high,gamma,days,11.5,3.1,P51; P53; P52; P54,Central mean with the highest upper bound of Klinkenberg's 95% CrIs for the SD,draft,
+gi_crosscheck,Generation interval,Rt renewal model (first-steps step 4),crosscheck,gamma,days,11.7,2.5,P57; P58,"Quick fallback: Vink 2014 pooled serial interval mean with the SD Marye 2026 assumed, used as a generation interval",draft,
