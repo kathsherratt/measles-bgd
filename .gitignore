@@ -55,6 +55,9 @@ outputs/logs/
 
 # Extracted DGHS data: not published until terms are agreed; regenerate with R/
 data/dghs-*.csv
+# Model fits embed the DGHS counts; Rt summaries are derived from them
+outputs/fits/
+outputs/rt/
 
 # Same for the press-release (sitrep) extraction
 sitrep/data/pdf/
